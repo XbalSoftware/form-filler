@@ -1,23 +1,30 @@
-# project_state.md — PDF Referral Templater (working name: EYEform)
+# project_state.md — PDF Referral Templater (app name: Form Filler)
 
 > Living document. Claude Code: read this at the start of every session; update it at the end of every session. `CLAUDE.md` holds the invariants and architecture — this file holds *status*.
 
-**Last updated:** 2026-07-06 (project inception — no code written yet)
+**Last updated:** 2026-07-17 (Stage 1 code written; awaiting build, test target, and user verification)
 
 ---
 
 ## Current status
 
-**Stage 0 — not yet started.** The Xcode project does not exist. Architecture is finalized (see CLAUDE.md). Next action: Stage 1 below.
+**Stage 1 — code complete, unverified.** All Stage 1 source and tests are written. Blocked on user actions:
+
+1. Build the app target (first build after the boilerplate was replaced and Swift language mode was raised to 6).
+2. Add a **Unit Testing Bundle** target in Xcode named `Form FillerTests` — the test files already exist in the `Form FillerTests/` folder at the repo root (Swift Testing, `@testable import Form_Filler`). Host app: Form Filler.
+3. Run the tests, run the app in the simulator, and confirm the DEBUG seed template ("Sample Referral (Debug)") appears in the library list.
+
+Stage 1 is not "done" until all three pass. Then Stage 2 (library UI) begins.
 
 ---
 
 ## Environment
 
 - Mac mini M4, macOS 26.5, Xcode 26.3
-- Target: iPadOS (iOS 26 SDK), Swift 6, SwiftUI, Observation framework
+- Target: iPadOS only (`TARGETED_DEVICE_FAMILY = 2`), **deployment target iOS 18.6+** (user decision 2026-07-17), Swift 6 language mode, SwiftUI, Observation framework
+- App name: **Form Filler** · bundle ID `Xbal.Form-Filler` · scheme `Form Filler` · module `Form_Filler`
+- Xcode project uses filesystem-synchronized groups — files added under `Form Filler/Form Filler/` join the app target automatically; no pbxproj edits needed for new source files
 - No third-party dependencies
-- Working app name: **EYEform** (placeholder — confirm with user before creating the project; bundle ID and display name are easy now, annoying later)
 
 ---
 
@@ -25,12 +32,12 @@
 
 Work strictly one stage at a time. A stage is done when it compiles, its tests pass, and the user has confirmed behavior in the simulator or on device.
 
-### Stage 1 — Skeleton, models, storage  ☐
-- Create Xcode project (iPad-only target), folder structure per CLAUDE.md
-- Implement `Template`, `FieldDefinition`, `FieldStyle`, `FieldType` (Codable, with `schemaVersion`)
-- Implement `TemplateStore`: enumerate/load/save/duplicate/delete template folders; atomic writes
-- Debug-only seed: bundle a sample PDF, create a seed template on first launch (DEBUG builds only)
-- Unit tests: Codable round-trip, store CRUD, defensive decoding of a hand-written old-schema json
+### Stage 1 — Skeleton, models, storage  ◐ (code written 2026-07-17; awaiting build/tests/user confirmation)
+- ✅ Xcode project (iPad-only target, created by user), folder structure per CLAUDE.md
+- ✅ `Template`, `FieldDefinition`, `FieldStyle`, `FieldType`, `FieldValue` (Codable with `schemaVersion`, defensive decoding, unknown-enum fallbacks)
+- ✅ `TemplateStore`: enumerate/load/save/duplicate/delete; atomic writes (staged-folder create, `.atomic` JSON); stored PDF chmod'd read-only
+- ✅ Debug-only seed: sample referral PDF **generated at runtime** via `UIGraphicsPDFRenderer` (no bundled asset), seed template with 5 fields on first launch, DEBUG builds only
+- ✅ Unit tests written (Swift Testing): Codable round-trip, old-schema defensive decode, store CRUD — ☐ test target not yet created in Xcode, tests not yet run
 
 ### Stage 2 — Template library UI  ☐
 - Library grid/list with thumbnails (`ThumbnailService`)
@@ -82,15 +89,19 @@ Searchable library · favorites · recently used · auto-fill doctor/clinic prof
 | 6 | Enum-based FieldType with two switch sites, not protocol-per-type | Cheap extensibility, compiler-enforced exhaustiveness | 2026-07-06 |
 | 7 | Default font Helvetica; per-field override | PDF-native, safe metrics | 2026-07-06 |
 | 8 | Auto-shrink text to fit field rect | Referral forms have tiny boxes; avoids constant size fiddling | 2026-07-06 |
+| 9 | App name **Form Filler**; deployment target **iOS 18.6+** | User decision at Stage 1 start | 2026-07-17 |
+| 10 | iPad-only target confirmed | User created project with `TARGETED_DEVICE_FAMILY = 2` | 2026-07-17 |
+| 11 | Debug seed PDF generated at runtime, not bundled | No binary asset in repo; layout struct drives both drawing and field rects so they always align | 2026-07-17 |
+| 12 | `duplicate()` regenerates field IDs as well as the template ID | Keeps IDs globally unique; cheap insurance for future cross-template features | 2026-07-17 |
+| 13 | Store never bumps `modifiedAt`; callers own dates | Keeps store writes predictable and tests deterministic | 2026-07-17 |
+| 14 | Keep Xcode 26's `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` on the app target; mark models + TemplateStore explicitly `nonisolated` | UI code stays simple under MainActor-by-default; data/storage types must be usable from any context (tests, future background export) | 2026-07-17 |
 
 ## Assumptions awaiting user confirmation
 
-- [ ] App name "EYEform" (placeholder)
-- [ ] iPad-only target (not universal) — the two-pane fill layout assumes it
-- [ ] Ephemeral fill sessions acceptable (no draft saving in v1)
-- [ ] Helvetica as default font
-
-Confirm these with the user at the start of Stage 1; move answers into the Decisions log.
+- [x] App name — **Form Filler** (confirmed 2026-07-17)
+- [x] iPad-only target — confirmed via project settings (2026-07-17)
+- [ ] Ephemeral fill sessions acceptable (no draft saving in v1) — proceeding per CLAUDE.md invariant #3; flag if wrong
+- [ ] Helvetica as default font — proceeding per Decision #7; flag if wrong
 
 ---
 
@@ -107,3 +118,5 @@ Confirm these with the user at the start of Stage 1; move answers into the Decis
 *(Claude Code: append an entry per session — date, stage, what was done, what's next.)*
 
 - **2026-07-06** — Project inception. Architecture finalized with Claude (chat). CLAUDE.md and this file created. Next: confirm assumptions, then Stage 1.
+- **2026-07-17** — Stage 1 code written. User created the Xcode project (iPad-only, iOS 18.6+, name Form Filler). Claude: raised `SWIFT_VERSION` to 6.0 in the pbxproj; created `App/`, `Models/`, `Services/`, `Support/`, `ViewModels/`, `Views/Library/` structure; replaced boilerplate `ContentView`/root app file; implemented models with defensive decoding, `TemplateStore` with atomic writes + read-only PDFs, runtime-generated DEBUG seed, slim `LibraryViewModel` + placeholder `LibraryView` (Stage 2 replaces it); wrote Swift Testing suites in `Form FillerTests/` (target must be added in Xcode). Note: pbxproj has stale project-level `IPHONEOS_DEPLOYMENT_TARGET = 26.2` in both configs — harmless, target-level 18.6 overrides it. Next: user builds, adds test target, runs tests + simulator, confirms seed template appears → then Stage 2 (library UI).
+- **2026-07-17 (b)** — User added the test target; test build failed: the app target's Xcode-26 default `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` had implicitly made all models and TemplateStore MainActor-isolated, which the (nonisolated) test code couldn't call. Fixed by marking Template, FieldDefinition, FieldStyle, TextAlignmentOption, FieldType, FieldValue, TemplateStore, and TemplateStoreError explicitly `nonisolated` (Decision #14); added missing `import CoreGraphics` to both test files (MemberImportVisibility); raised the test target to Swift 6.0. User will test on a physical iPad rather than the simulator. Awaiting: green test run + seed template visible on device.

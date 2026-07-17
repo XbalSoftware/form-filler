@@ -1,4 +1,4 @@
-# CLAUDE.md — PDF Referral Templater (working name: EYEform)
+# CLAUDE.md — PDF Referral Templater (app name: Form Filler)
 
 This file governs how Claude Code works on this project. Read it fully before making changes. `project_state.md` (repo root) tracks current progress, decisions, and next steps — read it at the start of every session and update it at the end of every work session.
 
@@ -21,7 +21,7 @@ It is **not** a PDF editor or annotation app. Scope discipline matters: resist f
 MVVM using the Observation framework (`@Observable`). Do **not** use `ObservableObject`/`@Published` — the deployment target makes Observation available everywhere.
 
 ```
-EYEform/
+Form Filler/
   App/                    # entry point, root navigation
   Models/                 # Template, FieldDefinition, FieldStyle, FieldType, FieldValue
   Services/
@@ -121,7 +121,7 @@ Some scanned referral forms carry a `/Rotate` value. Coordinate conversion must 
 
 ## Working process
 
-- Build after every meaningful change: `xcodebuild -scheme EYEform -destination 'platform=iOS Simulator,name=iPad Pro 13-inch (M4)' build` (adjust simulator name to what's installed; `xcrun simctl list devices` to check).
+- Build after every meaningful change: `xcodebuild -scheme "Form Filler" -destination 'platform=iOS Simulator,name=iPad Pro 13-inch (M4)' build` (adjust simulator name to what's installed; `xcrun simctl list devices` to check). The user handles builds/tests/commits; Claude writes the code.
 - Run tests with the same destination via `xcodebuild test`.
 - One roadmap stage at a time (see `project_state.md`). Do not start the next stage until the current one compiles, tests pass, and the user has confirmed it works on device/simulator.
 - Update `project_state.md` at the end of every session: what was completed, decisions made, known issues, next step.
