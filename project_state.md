@@ -8,13 +8,13 @@
 
 ## Current status
 
-**Stage 1 — code complete, unverified.** All Stage 1 source and tests are written. Blocked on user actions:
+**Stage 2 — code complete, unverified.** Stage 1 is done (user-confirmed 2026-07-17: clean build, tests green, seed template visible; testing happens on a physical iPad, not the simulator). Stage 2 code is written and awaits user verification:
 
-1. Build the app target (first build after the boilerplate was replaced and Swift language mode was raised to 6).
-2. Add a **Unit Testing Bundle** target in Xcode named `Form FillerTests` — the test files already exist in the `Form FillerTests/` folder at the repo root (Swift Testing, `@testable import Form_Filler`). Host app: Form Filler.
-3. Run the tests, run the app in the simulator, and confirm the DEBUG seed template ("Sample Referral (Debug)") appears in the library list.
+1. Build & run on iPad; the library should now be a thumbnail grid.
+2. Exercise: import a PDF (Files app → name/category sheet), long-press a card for Edit Details / Duplicate / Delete (with confirmation), tap a card → detail screen with disabled Editor/Fill placeholders.
+3. Re-run tests (⌘U) — no new tests in Stage 2 (UI + rendering only), existing 13 must stay green.
 
-Stage 1 is not "done" until all three pass. Then Stage 2 (library UI) begins.
+Then Stage 3 (page canvas + coordinate layer, with mandatory coordinate tests) begins.
 
 ---
 
@@ -32,18 +32,18 @@ Stage 1 is not "done" until all three pass. Then Stage 2 (library UI) begins.
 
 Work strictly one stage at a time. A stage is done when it compiles, its tests pass, and the user has confirmed behavior in the simulator or on device.
 
-### Stage 1 — Skeleton, models, storage  ◐ (code written 2026-07-17; awaiting build/tests/user confirmation)
+### Stage 1 — Skeleton, models, storage  ✅ (done; user-confirmed on device 2026-07-17)
 - ✅ Xcode project (iPad-only target, created by user), folder structure per CLAUDE.md
 - ✅ `Template`, `FieldDefinition`, `FieldStyle`, `FieldType`, `FieldValue` (Codable with `schemaVersion`, defensive decoding, unknown-enum fallbacks)
 - ✅ `TemplateStore`: enumerate/load/save/duplicate/delete; atomic writes (staged-folder create, `.atomic` JSON); stored PDF chmod'd read-only
 - ✅ Debug-only seed: sample referral PDF **generated at runtime** via `UIGraphicsPDFRenderer` (no bundled asset), seed template with 5 fields on first launch, DEBUG builds only
 - ✅ Unit tests written (Swift Testing): Codable round-trip, old-schema defensive decode, store CRUD — ☐ test target not yet created in Xcode, tests not yet run
 
-### Stage 2 — Template library UI  ☐
-- Library grid/list with thumbnails (`ThumbnailService`)
-- Import PDF via `fileImporter` / document picker; name + optional category on import
-- Rename, duplicate, delete (with confirmation), edit category
-- Navigation: template → Editor or Fill mode
+### Stage 2 — Template library UI  ◐ (code written 2026-07-17; awaiting user verification)
+- ✅ Library grid with thumbnails (`ThumbnailService`: PDFKit page-1 render, cached as `thumbnail.png`, off-main via `@concurrent`)
+- ✅ Import PDF via `fileImporter` (validated with PDFKit); name + optional category sheet
+- ✅ Edit Details (rename + category), Duplicate, Delete with confirmation — via card context menu (long-press)
+- ✅ Navigation: card → `TemplateDetailView` with Editor/Fill entry points (disabled placeholders until Stages 4/5)
 
 ### Stage 3 — Page canvas + coordinate layer  ☐  *(foundation for both modes)*
 - `PDFRenderService`: PDFPage → UIImage at scale, cached; re-render on material zoom change only
@@ -120,3 +120,4 @@ Searchable library · favorites · recently used · auto-fill doctor/clinic prof
 - **2026-07-06** — Project inception. Architecture finalized with Claude (chat). CLAUDE.md and this file created. Next: confirm assumptions, then Stage 1.
 - **2026-07-17** — Stage 1 code written. User created the Xcode project (iPad-only, iOS 18.6+, name Form Filler). Claude: raised `SWIFT_VERSION` to 6.0 in the pbxproj; created `App/`, `Models/`, `Services/`, `Support/`, `ViewModels/`, `Views/Library/` structure; replaced boilerplate `ContentView`/root app file; implemented models with defensive decoding, `TemplateStore` with atomic writes + read-only PDFs, runtime-generated DEBUG seed, slim `LibraryViewModel` + placeholder `LibraryView` (Stage 2 replaces it); wrote Swift Testing suites in `Form FillerTests/` (target must be added in Xcode). Note: pbxproj has stale project-level `IPHONEOS_DEPLOYMENT_TARGET = 26.2` in both configs — harmless, target-level 18.6 overrides it. Next: user builds, adds test target, runs tests + simulator, confirms seed template appears → then Stage 2 (library UI).
 - **2026-07-17 (b)** — User added the test target; test build failed: the app target's Xcode-26 default `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` had implicitly made all models and TemplateStore MainActor-isolated, which the (nonisolated) test code couldn't call. Fixed by marking Template, FieldDefinition, FieldStyle, TextAlignmentOption, FieldType, FieldValue, TemplateStore, and TemplateStoreError explicitly `nonisolated` (Decision #14); added missing `import CoreGraphics` to both test files (MemberImportVisibility); raised the test target to Swift 6.0. User will test on a physical iPad rather than the simulator. Awaiting: green test run + seed template visible on device.
+- **2026-07-17 (c)** — Stage 1 confirmed by user; Stage 2 written. New: `ThumbnailService` (PDFKit first-page render at 640px wide, PNG-cached in the template folder, `@concurrent` so it runs off-main, rotation-aware aspect); `LibraryViewModel` expanded (import with PDF validation via security-scoped URL, updateDetails/duplicate/delete, per-template async thumbnail loading with in-flight dedup, error alert binding); views split per the ~80-line rule: `LibraryView` (nav + sheets + dialogs), `LibraryGridView` (adaptive LazyVGrid + context menus), `TemplateCardView`, `TemplateFormSheet` (shared by import & edit-details), `TemplateDetailView` (Editor/Fill placeholders). No new unit tests (UI/rendering layer). Next: user verifies on iPad → Stage 3 (page canvas + coordinate conversion, tests mandatory before Stage 4).
