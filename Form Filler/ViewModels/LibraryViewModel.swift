@@ -58,6 +58,10 @@ final class LibraryViewModel {
         templates.first { $0.id == id }
     }
 
+    func pdfURL(for template: Template) -> URL {
+        store.pdfURL(for: template)
+    }
+
     // MARK: - Import
 
     /// Reads and validates a picked file. Returns nil (and sets the error

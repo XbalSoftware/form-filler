@@ -23,7 +23,7 @@ struct LibraryView: View {
                 }
                 .navigationDestination(for: UUID.self) { id in
                     if let template = viewModel.template(withID: id) {
-                        TemplateDetailView(template: template, thumbnail: viewModel.thumbnails[id])
+                        TemplateDetailView(template: template, pdfURL: viewModel.pdfURL(for: template))
                     } else {
                         ContentUnavailableView("Template Not Found", systemImage: "questionmark.folder")
                     }

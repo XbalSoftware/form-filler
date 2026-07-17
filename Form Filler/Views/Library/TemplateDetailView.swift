@@ -2,44 +2,48 @@
 //  TemplateDetailView.swift
 //  Form Filler
 //
-//  Landing screen for one template. The Editor (Stage 4) and Fill (Stage 5)
-//  entry points live here; until those stages exist the buttons are
-//  disabled placeholders.
+//  Landing screen for one template: interactive zoomable page preview
+//  (the Stage 3 canvas) plus the Editor (Stage 4) and Fill (Stage 5) entry
+//  points, disabled until those stages exist.
 //
 
 import SwiftUI
 
 struct TemplateDetailView: View {
     let template: Template
-    let thumbnail: UIImage?
+    let pdfURL: URL
+
+    @State private var renderService: PDFRenderService?
+    @State private var selectedPage = 0
+    @State private var didFailToLoad = false
 
     var body: some View {
-        VStack(spacing: 24) {
-            preview
-            modeButtons
-            Text("Template editing and form filling arrive in upcoming stages.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-        .padding(32)
-        .navigationTitle(template.name)
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private var preview: some View {
         Group {
-            if let thumbnail {
-                Image(uiImage: thumbnail)
-                    .resizable()
-                    .scaledToFit()
-                    .shadow(color: .black.opacity(0.15), radius: 6, y: 2)
+            if let renderService {
+                VStack(spacing: 12) {
+                    PageCanvasView(renderService: renderService, pageIndex: selectedPage)
+                    if renderService.pageCount > 1 {
+                        PageStripView(renderService: renderService, selectedPage: $selectedPage)
+                    }
+                    modeButtons
+                }
+                .padding()
+            } else if didFailToLoad {
+                ContentUnavailableView(
+                    "Couldn't Open PDF",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text("The template's PDF file couldn't be read.")
+                )
             } else {
-                Image(systemName: "doc.text")
-                    .font(.system(size: 80))
-                    .foregroundStyle(.tertiary)
+                ProgressView()
+                    .task {
+                        renderService = PDFRenderService(url: pdfURL)
+                        didFailToLoad = renderService == nil
+                    }
             }
         }
-        .frame(maxWidth: 420, maxHeight: .infinity)
+        .navigationTitle(template.name)
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private var modeButtons: some View {

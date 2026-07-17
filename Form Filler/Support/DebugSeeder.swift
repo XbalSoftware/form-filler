@@ -33,20 +33,28 @@ enum DebugSeeder {
         var label: String
         var fieldName: String
         var type: FieldType
+        var pageIndex: Int
         var frame: CGRect               // top-left origin, drawing space
     }
 
     private static let boxes: [Box] = [
         Box(label: "Patient name", fieldName: "Patient Name", type: .singleLineText,
-            frame: CGRect(x: 170, y: 130, width: 300, height: 24)),
+            pageIndex: 0, frame: CGRect(x: 170, y: 130, width: 300, height: 24)),
         Box(label: "Date of birth", fieldName: "Date of Birth", type: .date,
-            frame: CGRect(x: 170, y: 170, width: 160, height: 24)),
+            pageIndex: 0, frame: CGRect(x: 170, y: 170, width: 160, height: 24)),
         Box(label: "Referral date", fieldName: "Referral Date", type: .date,
-            frame: CGRect(x: 170, y: 210, width: 160, height: 24)),
+            pageIndex: 0, frame: CGRect(x: 170, y: 210, width: 160, height: 24)),
         Box(label: "Urgent", fieldName: "Urgent", type: .checkbox,
-            frame: CGRect(x: 170, y: 252, width: 18, height: 18)),
+            pageIndex: 0, frame: CGRect(x: 170, y: 252, width: 18, height: 18)),
         Box(label: "Reason for referral", fieldName: "Reason for Referral", type: .multiLineText,
-            frame: CGRect(x: 40, y: 320, width: 532, height: 140)),
+            pageIndex: 0, frame: CGRect(x: 40, y: 320, width: 532, height: 140)),
+        Box(label: "Additional notes", fieldName: "Additional Notes", type: .multiLineText,
+            pageIndex: 1, frame: CGRect(x: 40, y: 140, width: 532, height: 560)),
+    ]
+
+    private static let pageTitles = [
+        "Anytown Eye Clinic — Referral Form",
+        "Anytown Eye Clinic — Continuation Sheet",
     ]
 
     /// Converts a top-left-origin drawing rect to PDF page point space
@@ -71,7 +79,7 @@ enum DebugSeeder {
                 FieldDefinition(
                     name: box.fieldName,
                     type: box.type,
-                    pageIndex: 0,
+                    pageIndex: box.pageIndex,
                     rect: pdfRect(for: box.frame),
                     style: .default,
                     sortOrder: index
@@ -83,8 +91,6 @@ enum DebugSeeder {
     private static func makeSamplePDF() -> Data {
         let renderer = UIGraphicsPDFRenderer(bounds: CGRect(origin: .zero, size: pageSize))
         return renderer.pdfData { context in
-            context.beginPage()
-
             let titleAttributes: [NSAttributedString.Key: Any] = [
                 .font: UIFont(name: "Helvetica-Bold", size: 22) ?? .boldSystemFont(ofSize: 22),
                 .foregroundColor: UIColor.black,
@@ -94,26 +100,30 @@ enum DebugSeeder {
                 .foregroundColor: UIColor.black,
             ]
 
-            "Anytown Eye Clinic — Referral Form".draw(at: CGPoint(x: 40, y: 48), withAttributes: titleAttributes)
-            "Sample form generated for DEBUG builds. Not a real document.".draw(
-                at: CGPoint(x: 40, y: 82), withAttributes: labelAttributes
-            )
+            for (pageIndex, title) in pageTitles.enumerated() {
+                context.beginPage()
 
-            let stroke = context.cgContext
-            stroke.setStrokeColor(UIColor.black.cgColor)
-            stroke.setLineWidth(1)
+                title.draw(at: CGPoint(x: 40, y: 48), withAttributes: titleAttributes)
+                "Sample form generated for DEBUG builds. Not a real document.".draw(
+                    at: CGPoint(x: 40, y: 82), withAttributes: labelAttributes
+                )
 
-            for box in boxes {
-                let labelPoint: CGPoint
-                if box.frame.minX > 60 {
-                    // Label sits to the left of the box, vertically centered.
-                    labelPoint = CGPoint(x: 40, y: box.frame.midY - 7)
-                } else {
-                    // Full-width box: label sits above it.
-                    labelPoint = CGPoint(x: box.frame.minX, y: box.frame.minY - 20)
+                let stroke = context.cgContext
+                stroke.setStrokeColor(UIColor.black.cgColor)
+                stroke.setLineWidth(1)
+
+                for box in boxes where box.pageIndex == pageIndex {
+                    let labelPoint: CGPoint
+                    if box.frame.minX > 60 {
+                        // Label sits to the left of the box, vertically centered.
+                        labelPoint = CGPoint(x: 40, y: box.frame.midY - 7)
+                    } else {
+                        // Full-width box: label sits above it.
+                        labelPoint = CGPoint(x: box.frame.minX, y: box.frame.minY - 20)
+                    }
+                    box.label.draw(at: labelPoint, withAttributes: labelAttributes)
+                    stroke.stroke(box.frame)
                 }
-                box.label.draw(at: labelPoint, withAttributes: labelAttributes)
-                stroke.stroke(box.frame)
             }
         }
     }

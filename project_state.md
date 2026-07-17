@@ -8,13 +8,13 @@
 
 ## Current status
 
-**Stage 2 — code complete, unverified.** Stage 1 is done (user-confirmed 2026-07-17: clean build, tests green, seed template visible; testing happens on a physical iPad, not the simulator). Stage 2 code is written and awaits user verification:
+**Stage 3 — code complete, unverified.** Stages 1–2 are done (user-confirmed on device 2026-07-17). Stage 3 code is written and awaits user verification:
 
-1. Build & run on iPad; the library should now be a thumbnail grid.
-2. Exercise: import a PDF (Files app → name/category sheet), long-press a card for Edit Details / Duplicate / Delete (with confirmation), tap a card → detail screen with disabled Editor/Fill placeholders.
-3. Re-run tests (⌘U) — no new tests in Stage 2 (UI + rendering only), existing 13 must stay green.
+1. ⌘U — 13 existing tests + 11 new `CoordinateConversionTests` must all pass.
+2. On iPad: open a template → interactive zoomable page preview (pinch to zoom, image sharpens when the gesture settles, pan while zoomed, content stays centered).
+3. Multi-page: import any multi-page PDF (or delete all templates and relaunch to regenerate the now-two-page debug seed) → page strip appears below the canvas, tapping a thumbnail switches pages and resets zoom.
 
-Then Stage 3 (page canvas + coordinate layer, with mandatory coordinate tests) begins.
+Then Stage 4 (template editor) begins — its overlays plug into `PageCanvasView`'s overlay closure.
 
 ---
 
@@ -39,18 +39,19 @@ Work strictly one stage at a time. A stage is done when it compiles, its tests p
 - ✅ Debug-only seed: sample referral PDF **generated at runtime** via `UIGraphicsPDFRenderer` (no bundled asset), seed template with 5 fields on first launch, DEBUG builds only
 - ✅ Unit tests written (Swift Testing): Codable round-trip, old-schema defensive decode, store CRUD — ☐ test target not yet created in Xcode, tests not yet run
 
-### Stage 2 — Template library UI  ◐ (code written 2026-07-17; awaiting user verification)
+### Stage 2 — Template library UI  ✅ (done; user-confirmed on device 2026-07-17)
 - ✅ Library grid with thumbnails (`ThumbnailService`: PDFKit page-1 render, cached as `thumbnail.png`, off-main via `@concurrent`)
 - ✅ Import PDF via `fileImporter` (validated with PDFKit); name + optional category sheet
 - ✅ Edit Details (rename + category), Duplicate, Delete with confirmation — via card context menu (long-press)
 - ✅ Navigation: card → `TemplateDetailView` with Editor/Fill entry points (disabled placeholders until Stages 4/5)
 
-### Stage 3 — Page canvas + coordinate layer  ☐  *(foundation for both modes)*
-- `PDFRenderService`: PDFPage → UIImage at scale, cached; re-render on material zoom change only
-- `ZoomablePageContainer`: SwiftUI pinch-zoom/pan container displaying the page image
-- `Support/CoordinateConversion.swift`: screen↔PDF-point-space conversion incl. mediaBox offset and page rotation (0/90/180/270)
-- **Unit tests for coordinate conversion are mandatory before Stage 4 begins**
-- Multi-page: page strip / pager
+### Stage 3 — Page canvas + coordinate layer  ◐ (code written 2026-07-17; awaiting user verification)  *(foundation for both modes)*
+- ✅ `Support/CoordinateConversion.swift`: `PageCoordinateSpace` — pure PDF↔view math (mediaBox offset, rotation 0/90/180/270, point + rect, both directions); single sanctioned `PDFPage` bridge
+- ✅ `PDFRenderService`: page → UIImage at quantized half-step scale, NSCache'd, 4096px edge cap, `@concurrent` (off-main); re-renders only on settled zoom change
+- ✅ `ZoomablePageContainer`: UIScrollView-backed pinch/pan hosting SwiftUI content (page + overlays scale together); reports stable zoom for re-render
+- ✅ `PageCanvasView`: GeometryReader fit + render orchestration + overlay closure `(PageCoordinateSpace, pageSize)` for Stages 4/5
+- ✅ Multi-page: `PageStripView` thumbnail strip (shown when pageCount > 1); debug seed PDF now has 2 pages
+- ✅ **11 `CoordinateConversionTests`** (corner mapping per rotation, offset mediaBox, scaling, round-trips, normalization, degenerate sizes) — written; must be green before Stage 4
 
 ### Stage 4 — Template editor  ☐
 - Tap to place field (default ~180×24pt); drag to move; corner handles to resize
@@ -121,3 +122,4 @@ Searchable library · favorites · recently used · auto-fill doctor/clinic prof
 - **2026-07-17** — Stage 1 code written. User created the Xcode project (iPad-only, iOS 18.6+, name Form Filler). Claude: raised `SWIFT_VERSION` to 6.0 in the pbxproj; created `App/`, `Models/`, `Services/`, `Support/`, `ViewModels/`, `Views/Library/` structure; replaced boilerplate `ContentView`/root app file; implemented models with defensive decoding, `TemplateStore` with atomic writes + read-only PDFs, runtime-generated DEBUG seed, slim `LibraryViewModel` + placeholder `LibraryView` (Stage 2 replaces it); wrote Swift Testing suites in `Form FillerTests/` (target must be added in Xcode). Note: pbxproj has stale project-level `IPHONEOS_DEPLOYMENT_TARGET = 26.2` in both configs — harmless, target-level 18.6 overrides it. Next: user builds, adds test target, runs tests + simulator, confirms seed template appears → then Stage 2 (library UI).
 - **2026-07-17 (b)** — User added the test target; test build failed: the app target's Xcode-26 default `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` had implicitly made all models and TemplateStore MainActor-isolated, which the (nonisolated) test code couldn't call. Fixed by marking Template, FieldDefinition, FieldStyle, TextAlignmentOption, FieldType, FieldValue, TemplateStore, and TemplateStoreError explicitly `nonisolated` (Decision #14); added missing `import CoreGraphics` to both test files (MemberImportVisibility); raised the test target to Swift 6.0. User will test on a physical iPad rather than the simulator. Awaiting: green test run + seed template visible on device.
 - **2026-07-17 (c)** — Stage 1 confirmed by user; Stage 2 written. New: `ThumbnailService` (PDFKit first-page render at 640px wide, PNG-cached in the template folder, `@concurrent` so it runs off-main, rotation-aware aspect); `LibraryViewModel` expanded (import with PDF validation via security-scoped URL, updateDetails/duplicate/delete, per-template async thumbnail loading with in-flight dedup, error alert binding); views split per the ~80-line rule: `LibraryView` (nav + sheets + dialogs), `LibraryGridView` (adaptive LazyVGrid + context menus), `TemplateCardView`, `TemplateFormSheet` (shared by import & edit-details), `TemplateDetailView` (Editor/Fill placeholders). No new unit tests (UI/rendering layer). Next: user verifies on iPad → Stage 3 (page canvas + coordinate conversion, tests mandatory before Stage 4).
+- **2026-07-17 (d)** — Stage 2 confirmed (after adding a missing `import UniformTypeIdentifiers` to LibraryView — MemberImportVisibility strikes again; remember explicit imports for every module a file touches). Stage 3 written: `PageCoordinateSpace` in Support/CoordinateConversion.swift (rotation math derived for clockwise /Rotate: pdf bottom-left corner lands top-left at 90°, top-right at 180°, bottom-right at 270°); `PDFRenderService` (@unchecked Sendable — read-only PDFDocument + thread-safe NSCache); `ZoomablePageContainer` (UIScrollView + UIHostingController, content centered via insets, `onStableZoomChange` on gesture end); `PageCanvasView` (fit + `.task(id:)` render keyed on page/width/zoom, `@Environment(\.displayScale)`); `PageStripView`; TemplateDetailView now shows the live canvas; debug seed PDF grew a second page ("Continuation Sheet", one multi-line field, pageIndex 1). 11 new coordinate tests. Next: user verifies (tests + zoom/pan/page-switch on iPad) → Stage 4 (template editor).
