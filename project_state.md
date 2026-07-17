@@ -8,13 +8,14 @@
 
 ## Current status
 
-**Stage 3 — code complete, unverified.** Stages 1–2 are done (user-confirmed on device 2026-07-17). Stage 3 code is written and awaits user verification:
+**Stage 4 — code complete, unverified.** Stages 1–3 are done (user-confirmed on device 2026-07-17). Stage 4 code is written and awaits user verification:
 
-1. ⌘U — 13 existing tests + 11 new `CoordinateConversionTests` must all pass.
-2. On iPad: open a template → interactive zoomable page preview (pinch to zoom, image sharpens when the gesture settles, pan while zoomed, content stays centered).
-3. Multi-page: import any multi-page PDF (or delete all templates and relaunch to regenerate the now-two-page debug seed) → page strip appears below the canvas, tapping a thumbnail switches pages and resets zoom.
+1. ⌘U — 24 existing + 9 new tests (`EdgeSnappingTests`, `ColorHexTests`) must all pass.
+2. On iPad, open a template → **Edit Template** (now enabled): tap empty page → new field appears selected; drag to move (snaps to neighbors' edges); corner handles resize; two fingers pan/zoom.
+3. Inspector right side: field list (tap to select, Reorder button for fill order, swipe to delete) ↔ field form (name, type, font, size, alignment, color, frame readout, nudge arrows, duplicate, delete).
+4. Edits persist: leave the editor, force-quit the app, reopen — fields must still be there. Field count on library cards updates.
 
-Then Stage 4 (template editor) begins — its overlays plug into `PageCanvasView`'s overlay closure.
+Then Stage 5 (fill mode) begins.
 
 ---
 
@@ -45,7 +46,7 @@ Work strictly one stage at a time. A stage is done when it compiles, its tests p
 - ✅ Edit Details (rename + category), Duplicate, Delete with confirmation — via card context menu (long-press)
 - ✅ Navigation: card → `TemplateDetailView` with Editor/Fill entry points (disabled placeholders until Stages 4/5)
 
-### Stage 3 — Page canvas + coordinate layer  ◐ (code written 2026-07-17; awaiting user verification)  *(foundation for both modes)*
+### Stage 3 — Page canvas + coordinate layer  ✅ (done; user-confirmed on device 2026-07-17)  *(foundation for both modes)*
 - ✅ `Support/CoordinateConversion.swift`: `PageCoordinateSpace` — pure PDF↔view math (mediaBox offset, rotation 0/90/180/270, point + rect, both directions); single sanctioned `PDFPage` bridge
 - ✅ `PDFRenderService`: page → UIImage at quantized half-step scale, NSCache'd, 4096px edge cap, `@concurrent` (off-main); re-renders only on settled zoom change
 - ✅ `ZoomablePageContainer`: UIScrollView-backed pinch/pan hosting SwiftUI content (page + overlays scale together); reports stable zoom for re-render
@@ -53,11 +54,13 @@ Work strictly one stage at a time. A stage is done when it compiles, its tests p
 - ✅ Multi-page: `PageStripView` thumbnail strip (shown when pageCount > 1); debug seed PDF now has 2 pages
 - ✅ **11 `CoordinateConversionTests`** (corner mapping per rotation, offset mediaBox, scaling, round-trips, normalization, degenerate sizes) — written; must be green before Stage 4
 
-### Stage 4 — Template editor  ☐
-- Tap to place field (default ~180×24pt); drag to move; corner handles to resize
-- Inspector panel: name, type, font, size, alignment, color, sortOrder (reorder fill sequence)
-- Duplicate field, delete field, nudge controls, light edge-snapping
-- Persist field edits to `template.json` via TemplateStore
+### Stage 4 — Template editor  ◐ (code written 2026-07-17; awaiting user verification)
+- ✅ Tap to place field (default 180×24pt, centered on tap, clamped to page); drag to move; 4 corner handles to resize (min 16×10 view pts)
+- ✅ Inspector: field list in fill order (tap-select, Reorder mode rewrites sortOrder, swipe-delete) ↔ field form (name, type, PDF-safe font list, size stepper 6–36, alignment segmented, ColorPicker→hex)
+- ✅ Duplicate field (+12/−12pt offset), delete, 1-pt nudge arrows (screen-direction, rotation-aware), light edge-snapping (`Support/EdgeSnapping.swift`, 6pt tolerance, nearest edge, per-axis)
+- ✅ Every mutation persists immediately via `TemplateStore.save` (atomic); `onPersist` callback refreshes the library
+- ✅ Gesture model: one finger edits, two fingers pan/pinch (`panRequiresTwoTouches` on ZoomablePageContainer)
+- ✅ 9 new tests: `EdgeSnappingTests` + `ColorHexTests` (`Support/ColorHex.swift`)
 
 ### Stage 5 — Fill mode  ☐
 - Two-pane layout: ordered form list (left) + live page preview with value overlays (right)
@@ -96,6 +99,9 @@ Searchable library · favorites · recently used · auto-fill doctor/clinic prof
 | 12 | `duplicate()` regenerates field IDs as well as the template ID | Keeps IDs globally unique; cheap insurance for future cross-template features | 2026-07-17 |
 | 13 | Store never bumps `modifiedAt`; callers own dates | Keeps store writes predictable and tests deterministic | 2026-07-17 |
 | 14 | Keep Xcode 26's `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` on the app target; mark models + TemplateStore explicitly `nonisolated` | UI code stays simple under MainActor-by-default; data/storage types must be usable from any context (tests, future background export) | 2026-07-17 |
+| 15 | Editor gesture model: one finger edits (tap/drag/resize), two fingers pan + pinch-zoom | Standard iPad canvas-editor pattern; cleanly avoids UIScrollView vs. field-drag gesture conflicts | 2026-07-17 |
+| 16 | Editor persists on every committed mutation (no explicit Save button) | Atomic tiny JSON writes; nothing to forget; matches iOS editing conventions | 2026-07-17 |
+| 17 | Font picker offers a small PDF-safe list (Helvetica ×3, Times, Courier) | Export renders with the same names; avoids fonts that may not embed cleanly | 2026-07-17 |
 
 ## Assumptions awaiting user confirmation
 
@@ -123,3 +129,4 @@ Searchable library · favorites · recently used · auto-fill doctor/clinic prof
 - **2026-07-17 (b)** — User added the test target; test build failed: the app target's Xcode-26 default `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` had implicitly made all models and TemplateStore MainActor-isolated, which the (nonisolated) test code couldn't call. Fixed by marking Template, FieldDefinition, FieldStyle, TextAlignmentOption, FieldType, FieldValue, TemplateStore, and TemplateStoreError explicitly `nonisolated` (Decision #14); added missing `import CoreGraphics` to both test files (MemberImportVisibility); raised the test target to Swift 6.0. User will test on a physical iPad rather than the simulator. Awaiting: green test run + seed template visible on device.
 - **2026-07-17 (c)** — Stage 1 confirmed by user; Stage 2 written. New: `ThumbnailService` (PDFKit first-page render at 640px wide, PNG-cached in the template folder, `@concurrent` so it runs off-main, rotation-aware aspect); `LibraryViewModel` expanded (import with PDF validation via security-scoped URL, updateDetails/duplicate/delete, per-template async thumbnail loading with in-flight dedup, error alert binding); views split per the ~80-line rule: `LibraryView` (nav + sheets + dialogs), `LibraryGridView` (adaptive LazyVGrid + context menus), `TemplateCardView`, `TemplateFormSheet` (shared by import & edit-details), `TemplateDetailView` (Editor/Fill placeholders). No new unit tests (UI/rendering layer). Next: user verifies on iPad → Stage 3 (page canvas + coordinate conversion, tests mandatory before Stage 4).
 - **2026-07-17 (d)** — Stage 2 confirmed (after adding a missing `import UniformTypeIdentifiers` to LibraryView — MemberImportVisibility strikes again; remember explicit imports for every module a file touches). Stage 3 written: `PageCoordinateSpace` in Support/CoordinateConversion.swift (rotation math derived for clockwise /Rotate: pdf bottom-left corner lands top-left at 90°, top-right at 180°, bottom-right at 270°); `PDFRenderService` (@unchecked Sendable — read-only PDFDocument + thread-safe NSCache); `ZoomablePageContainer` (UIScrollView + UIHostingController, content centered via insets, `onStableZoomChange` on gesture end); `PageCanvasView` (fit + `.task(id:)` render keyed on page/width/zoom, `@Environment(\.displayScale)`); `PageStripView`; TemplateDetailView now shows the live canvas; debug seed PDF grew a second page ("Continuation Sheet", one multi-line field, pageIndex 1). 11 new coordinate tests. Next: user verifies (tests + zoom/pan/page-switch on iPad) → Stage 4 (template editor).
+- **2026-07-17 (e)** — Stage 3 confirmed (one fix en route: `nonisolated` restated on the `PageCoordinateSpace.init(page:)` extension — extensions don't inherit the type's `nonisolated` under MainActor-by-default; add `nonisolated` to every extension member intended to be non-main-actor). Stage 4 written: `TemplateEditorViewModel` (all mutations + immediate persist + `onPersist`→library refresh); `Views/Editor/` = TemplateEditorView (canvas + 320pt inspector, save-error alert), EditorPageOverlayView (tap-catcher: deselect-or-create; named coordinate space "editorPage"), FieldOverlayView (move drag w/ live snap, 4 resize handles w/ −10pt inset touch targets), FieldListView (EditMode reorder), FieldInspectorForm (keyPath-based bindings into `updateSelectedField`); `EdgeSnapping` + `ColorHex` in Support with 9 tests; `FieldType.displayName`; ZoomablePageContainer gained `panRequiresTwoTouches` (Decision #15). Detail-screen Edit button now live via `EditorRoute` navigationDestination. Decisions #15–17 logged. Next: user verifies → Stage 5 (fill mode).

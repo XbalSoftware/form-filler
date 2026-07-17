@@ -48,14 +48,11 @@ struct TemplateDetailView: View {
 
     private var modeButtons: some View {
         HStack(spacing: 20) {
-            Button {
-                // Stage 4: template editor
-            } label: {
+            NavigationLink(value: EditorRoute(templateID: template.id)) {
                 Label("Edit Template", systemImage: "square.and.pencil")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
-            .disabled(true)
 
             Button {
                 // Stage 5: fill mode

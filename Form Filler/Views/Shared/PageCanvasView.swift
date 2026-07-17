@@ -14,6 +14,7 @@ import SwiftUI
 struct PageCanvasView<Overlay: View>: View {
     let renderService: PDFRenderService
     let pageIndex: Int
+    var panRequiresTwoTouches: Bool = false
     @ViewBuilder var overlay: (_ space: PageCoordinateSpace, _ pageSize: CGSize) -> Overlay
 
     @Environment(\.displayScale) private var displayScale
@@ -32,6 +33,7 @@ struct PageCanvasView<Overlay: View>: View {
                 let fitted = fittedSize(for: space.displaySize, in: geometry.size)
                 ZoomablePageContainer(
                     contentSize: fitted,
+                    panRequiresTwoTouches: panRequiresTwoTouches,
                     onStableZoomChange: { stableZoom = $0 }
                 ) {
                     ZStack(alignment: .topLeading) {

@@ -62,6 +62,14 @@ final class LibraryViewModel {
         store.pdfURL(for: template)
     }
 
+    /// The editor persists through the same store; every save refreshes
+    /// the library so field counts and dates stay current.
+    func makeEditorViewModel(for template: Template) -> TemplateEditorViewModel {
+        TemplateEditorViewModel(template: template, store: store) { [weak self] in
+            self?.refresh()
+        }
+    }
+
     // MARK: - Import
 
     /// Reads and validates a picked file. Returns nil (and sets the error

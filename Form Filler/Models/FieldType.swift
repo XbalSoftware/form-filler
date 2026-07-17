@@ -25,4 +25,14 @@ nonisolated enum FieldType: String, Codable, CaseIterable, Sendable {
         let raw = try decoder.singleValueContainer().decode(String.self)
         self = FieldType(rawValue: raw) ?? .singleLineText
     }
+
+    var displayName: String {
+        switch self {
+        case .singleLineText: "Single-line Text"
+        case .multiLineText: "Multi-line Text"
+        case .date: "Date"
+        case .checkbox: "Checkbox"
+        case .staticText: "Static Text"
+        }
+    }
 }

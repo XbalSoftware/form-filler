@@ -15,6 +15,9 @@ struct ZoomablePageContainer<Content: View>: UIViewRepresentable {
     /// Base (zoom = 1) size of the hosted content, in view points.
     let contentSize: CGSize
     var maximumZoom: CGFloat = 6
+    /// Editor mode: one-finger touches go to the content (tap/drag fields);
+    /// panning requires two fingers. Pinch-zoom is unaffected.
+    var panRequiresTwoTouches: Bool = false
     /// Called when a zoom gesture settles — the cue to re-render the page
     /// image at a sharper scale.
     var onStableZoomChange: ((CGFloat) -> Void)?
@@ -29,6 +32,10 @@ struct ZoomablePageContainer<Content: View>: UIViewRepresentable {
         scrollView.showsVerticalScrollIndicator = false
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.backgroundColor = .clear
+        if panRequiresTwoTouches {
+            scrollView.panGestureRecognizer.minimumNumberOfTouches = 2
+            scrollView.delaysContentTouches = false
+        }
 
         let hosting = UIHostingController(rootView: AnyView(content()))
         hosting.view.backgroundColor = .clear
