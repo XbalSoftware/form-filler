@@ -21,6 +21,7 @@ final class FillSessionViewModel {
     var values: [UUID: FieldValue] = [:]
     var focusedFieldID: UUID?
     var currentPageIndex = 0
+    var errorMessage: String?
 
     init(template: Template, store: TemplateStore) {
         self.template = template
@@ -37,13 +38,22 @@ final class FillSessionViewModel {
         PDFExportService.defaultFileName(for: template)
     }
 
-    func makeExportItem() -> ExportedFormPDF {
-        ExportedFormPDF(
+    /// Renders the filled PDF and writes it to the temp export directory
+    /// (purged on launch and when leaving this screen). Returns the file
+    /// URL — the share sheet must be handed this URL directly, not a lazy
+    /// file promise: the user's EMR software only accepts concrete URLs
+    /// to PDF files.
+    func exportToTemporaryFile() throws -> URL {
+        let data = try PDFExportService().exportPDF(
             template: template,
             values: values,
-            sourceURL: pdfURL,
-            fileName: exportFileName
+            sourceURL: pdfURL
         )
+        let directory = PDFExportService.temporaryExportDirectory
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appending(path: exportFileName)
+        try data.write(to: url, options: .atomic)
+        return url
     }
 
     /// Fields the user fills in, in fill order. Static text is rendered

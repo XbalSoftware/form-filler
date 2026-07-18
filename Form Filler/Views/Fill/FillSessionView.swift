@@ -14,9 +14,16 @@ struct FillRoute: Hashable {
 }
 
 struct FillSessionView: View {
+    /// Identifiable wrapper so the share popover presents per export.
+    private struct ExportedFile: Identifiable {
+        let id = UUID()
+        let url: URL
+    }
+
     @State private var viewModel: FillSessionViewModel
     @State private var isConfirmingClear = false
     @State private var isConfirmingDiscard = false
+    @State private var exportedFile: ExportedFile?
 
     @Environment(\.dismiss) private var dismiss
 
@@ -49,13 +56,20 @@ struct FillSessionView: View {
                     isConfirmingClear = true
                 }
                 .disabled(!viewModel.hasAnyValues)
-                ShareLink(
-                    item: viewModel.makeExportItem(),
-                    preview: SharePreview(viewModel.exportFileName)
-                ) {
-                    Label("Export", systemImage: "square.and.arrow.up")
+                Button("Export", systemImage: "square.and.arrow.up") {
+                    do {
+                        exportedFile = ExportedFile(url: try viewModel.exportToTemporaryFile())
+                    } catch {
+                        viewModel.errorMessage = "Export failed: \(error.localizedDescription)"
+                    }
                 }
                 .disabled(!viewModel.hasExportableContent)
+                .popover(item: $exportedFile) { file in
+                    ActivityShareSheet(fileURL: file.url) {
+                        exportedFile = nil
+                    }
+                    .frame(minWidth: 380, minHeight: 540)
+                }
             }
         }
         .confirmationDialog(
@@ -75,9 +89,21 @@ struct FillSessionView: View {
         } message: {
             Text("Entries are never saved. Leaving this screen discards them.")
         }
+        .alert("Something Went Wrong", isPresented: errorBinding) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(viewModel.errorMessage ?? "")
+        }
         .onDisappear {
             PDFExportService.purgeTemporaryExports()
         }
+    }
+
+    private var errorBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.errorMessage != nil },
+            set: { if !$0 { viewModel.errorMessage = nil } }
+        )
     }
 
     @ViewBuilder
