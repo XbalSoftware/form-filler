@@ -65,11 +65,15 @@ struct FieldOverlayView: View {
                     )
             }
             .overlay(alignment: .leading) {
+                // The field's name rides inside the box (including while
+                // dragging/resizing — displayRect is the live rect) so it's
+                // always clear which inspector row is which box.
                 Text(field.name)
                     .font(.system(size: max(7, min(10, displayRect.height * 0.55))))
                     .lineLimit(1)
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 3)
+                    .truncationMode(.middle)
+                    .foregroundStyle(.gray)
+                    .padding(.horizontal, 3)
             }
             .frame(width: displayRect.width, height: displayRect.height)
             .position(x: displayRect.midX, y: displayRect.midY)

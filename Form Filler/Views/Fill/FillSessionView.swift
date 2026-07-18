@@ -2,9 +2,11 @@
 //  FillSessionView.swift
 //  Form Filler
 //
-//  Stage 5 fill mode: ordered form list on the left, live page preview
-//  with value overlays on the right. Values are transient — leaving this
-//  screen discards them (CLAUDE.md invariant #3).
+//  Fill mode: ordered form list on the left, live page preview with value
+//  overlays on the right. Values live in memory and autosave to the
+//  encrypted on-device draft vault (every 5 seconds and whenever the
+//  screen or app is left), so a session survives editing the template
+//  mid-entry or an accidental exit — until "Clear form".
 //
 
 import SwiftUI
@@ -14,7 +16,7 @@ struct FillRoute: Hashable {
 }
 
 struct FillSessionView: View {
-    /// Identifiable wrapper so the share popover presents per export.
+    /// Identifiable wrapper so the share popover / save sheet present per export.
     private struct ExportedFile: Identifiable {
         let id = UUID()
         let url: URL
@@ -22,10 +24,13 @@ struct FillSessionView: View {
 
     @State private var viewModel: FillSessionViewModel
     @State private var isConfirmingClear = false
-    @State private var isConfirmingDiscard = false
-    @State private var exportedFile: ExportedFile?
+    @State private var sharedFile: ExportedFile?
+    @State private var savedFile: ExportedFile?
+    @State private var draftToResume: FillSessionPayload?
+    @State private var isShowingDraftPrompt = false
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
 
     init(viewModel: FillSessionViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -40,63 +45,110 @@ struct FillSessionView: View {
         }
         .navigationTitle(viewModel.template.name)
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(true)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button("Back", systemImage: "chevron.backward") {
-                    if viewModel.hasAnyValues {
-                        isConfirmingDiscard = true
-                    } else {
-                        dismiss()
-                    }
-                }
-            }
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Button("Clear All", systemImage: "eraser") {
-                    isConfirmingClear = true
-                }
-                .disabled(!viewModel.hasAnyValues)
-                Button("Export", systemImage: "square.and.arrow.up") {
-                    do {
-                        exportedFile = ExportedFile(url: try viewModel.exportToTemporaryFile())
-                    } catch {
-                        viewModel.errorMessage = "Export failed: \(error.localizedDescription)"
-                    }
-                }
-                .disabled(!viewModel.hasExportableContent)
-                .popover(item: $exportedFile) { file in
-                    ActivityShareSheet(fileURL: file.url) {
-                        exportedFile = nil
-                    }
-                    .frame(minWidth: 380, minHeight: 540)
-                }
-            }
-        }
+        .toolbar { toolbarContent }
         .confirmationDialog(
-            "Clear all entered values?",
+            "Clear this form?",
             isPresented: $isConfirmingClear,
             titleVisibility: .visible
         ) {
-            Button("Clear All", role: .destructive) { viewModel.clearAll() }
-        }
-        .confirmationDialog(
-            "Discard entered values?",
-            isPresented: $isConfirmingDiscard,
-            titleVisibility: .visible
-        ) {
-            Button("Discard and Leave", role: .destructive) { dismiss() }
-            Button("Keep Editing", role: .cancel) {}
+            Button("Clear Form", role: .destructive) { viewModel.clearAll() }
         } message: {
-            Text("Entries are never saved. Leaving this screen discards them.")
+            Text("This clears every entered value and deletes the saved draft.")
+        }
+        .alert(
+            "Resume saved draft?",
+            isPresented: $isShowingDraftPrompt,
+            presenting: draftToResume
+        ) { draft in
+            Button("Resume") { viewModel.restoreDraft(draft) }
+            Button("Start Fresh", role: .destructive) { viewModel.discardDraft() }
+        } message: { draft in
+            Text("Entries for this form were saved \(draft.savedAt.formatted(date: .abbreviated, time: .shortened)). Starting fresh deletes them.")
         }
         .alert("Something Went Wrong", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
+        .onAppear {
+            // Skip the prompt when the session already has values (e.g. a
+            // reopened exported PDF, or returning from the editor).
+            if !viewModel.hasAnyValues, let draft = viewModel.availableDraft() {
+                draftToResume = draft
+                isShowingDraftPrompt = true
+            }
+        }
+        .task {
+            // 5-second autosave heartbeat; unchanged ticks are free.
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(5))
+                viewModel.autosaveDraft()
+            }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase != .active {
+                viewModel.autosaveDraft()
+            }
+        }
         .onDisappear {
+            viewModel.autosaveDraft()
             PDFExportService.purgeTemporaryExports()
         }
+    }
+
+    // MARK: - Toolbar
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Button("Clear form") { isConfirmingClear = true }
+                .disabled(!viewModel.hasAnyValues)
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            HStack(spacing: 8) {
+                Button("Print", systemImage: "printer") {
+                    withExportedFile { printPDF(at: $0) }
+                }
+                Button("Save", systemImage: "folder") {
+                    withExportedFile { savedFile = ExportedFile(url: $0) }
+                }
+                .sheet(item: $savedFile) { file in
+                    DocumentExportPicker(fileURL: file.url) { savedFile = nil }
+                }
+                Button("Share", systemImage: "square.and.arrow.up") {
+                    withExportedFile { sharedFile = ExportedFile(url: $0) }
+                }
+                .popover(item: $sharedFile) { file in
+                    ActivityShareSheet(fileURL: file.url) {
+                        sharedFile = nil
+                    }
+                    .frame(minWidth: 380, minHeight: 540)
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.blue)
+            .disabled(!viewModel.hasExportableContent)
+        }
+    }
+
+    /// Renders + writes the PDF, then hands the file URL to `action`;
+    /// export errors land in the shared error alert.
+    private func withExportedFile(_ action: (URL) -> Void) {
+        do {
+            action(try viewModel.exportToTemporaryFile())
+        } catch {
+            viewModel.errorMessage = "Export failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func printPDF(at url: URL) {
+        let printInfo = UIPrintInfo(dictionary: nil)
+        printInfo.jobName = viewModel.exportFileName
+        printInfo.outputType = .general
+        let controller = UIPrintInteractionController.shared
+        controller.printInfo = printInfo
+        controller.printingItem = url
+        controller.present(animated: true)
     }
 
     private var errorBinding: Binding<Bool> {
@@ -105,6 +157,8 @@ struct FillSessionView: View {
             set: { if !$0 { viewModel.errorMessage = nil } }
         )
     }
+
+    // MARK: - Preview column
 
     @ViewBuilder
     private var previewColumn: some View {

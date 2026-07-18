@@ -22,10 +22,15 @@ final class LibraryViewModel {
     private(set) var templates: [Template] = []
     private(set) var thumbnails: [UUID: UIImage] = [:]
     var errorMessage: String?
+    /// Non-error outcome notices (e.g. a restore summary).
+    var infoMessage: String?
 
     private let store: TemplateStore
     private let thumbnailService = ThumbnailService()
     private var thumbnailLoadsInFlight: Set<UUID> = []
+    /// Values recovered from an exported PDF, waiting for the fill screen
+    /// they were routed to; consumed by `makeFillSessionViewModel`.
+    private var pendingFillRestore: (templateID: UUID, values: [UUID: FieldValue])?
 
     init(store: TemplateStore = TemplateStore()) {
         self.store = store
@@ -35,6 +40,11 @@ final class LibraryViewModel {
     var isPresentingError: Bool {
         get { errorMessage != nil }
         set { if !newValue { errorMessage = nil } }
+    }
+
+    var isPresentingInfo: Bool {
+        get { infoMessage != nil }
+        set { if !newValue { infoMessage = nil } }
     }
 
     func onAppear() {
@@ -71,7 +81,74 @@ final class LibraryViewModel {
     }
 
     func makeFillSessionViewModel(for template: Template) -> FillSessionViewModel {
-        FillSessionViewModel(template: template, store: store)
+        let viewModel = FillSessionViewModel(template: template, store: store)
+        if let pending = pendingFillRestore, pending.templateID == template.id {
+            viewModel.values = pending.values
+            pendingFillRestore = nil
+        }
+        return viewModel
+    }
+
+    // MARK: - Backup & reopen
+
+    /// Writes the whole-library backup file to a temp location for the
+    /// save picker. Nil (with the error set) on failure.
+    func exportBackupToTemporaryFile() -> URL? {
+        do {
+            let data = try LibraryBackupService(store: store).exportBackup()
+            let directory = FileManager.default.temporaryDirectory
+                .appending(path: "Backups", directoryHint: .isDirectory)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let url = directory.appending(path: LibraryBackupService.defaultFileName())
+            try data.write(to: url, options: .atomic)
+            return url
+        } catch {
+            errorMessage = "Backup failed: \(error.localizedDescription)"
+            return nil
+        }
+    }
+
+    func restoreBackup(from url: URL) {
+        guard let data = readSecurityScoped(url) else { return }
+        do {
+            let summary = try LibraryBackupService(store: store).restore(from: data)
+            refresh()
+            var message = "Restored \(summary.imported) template\(summary.imported == 1 ? "" : "s")."
+            if summary.skipped > 0 {
+                message += " Skipped \(summary.skipped) already in the library."
+            }
+            infoMessage = message
+        } catch {
+            errorMessage = "Restore failed: \(error.localizedDescription)"
+        }
+    }
+
+    /// Reads the fill payload embedded in a previously exported PDF and,
+    /// if its template still exists, returns the fill route to push (the
+    /// values are handed over when that route builds its view model).
+    func prepareFillRestore(from url: URL) -> FillRoute? {
+        guard let data = readSecurityScoped(url) else { return nil }
+        guard let payload = PDFExportService.embeddedPayload(in: data) else {
+            errorMessage = "\"\(url.lastPathComponent)\" doesn't contain re-editable Form Filler data. Only PDFs exported by this app (and not rewritten by another tool) can be reopened."
+            return nil
+        }
+        guard template(withID: payload.templateID) != nil else {
+            let name = payload.templateName.isEmpty ? "its template" : "\"\(payload.templateName)\""
+            errorMessage = "This PDF was made with \(name), which is no longer in the library. Restore the template first, then reopen the PDF."
+            return nil
+        }
+        pendingFillRestore = (payload.templateID, payload.fieldValues)
+        return FillRoute(templateID: payload.templateID)
+    }
+
+    private func readSecurityScoped(_ url: URL) -> Data? {
+        let didStartAccess = url.startAccessingSecurityScopedResource()
+        defer { if didStartAccess { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else {
+            errorMessage = "Couldn't read the selected file."
+            return nil
+        }
+        return data
     }
 
     // MARK: - Import

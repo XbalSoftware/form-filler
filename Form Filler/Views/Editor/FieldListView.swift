@@ -68,6 +68,7 @@ struct FieldListView: View {
         case .date: "calendar"
         case .checkbox: "checkmark.square"
         case .staticText: "text.quote"
+        case .patientName: "person.text.rectangle"
         }
     }
 }

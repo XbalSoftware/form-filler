@@ -31,14 +31,34 @@ nonisolated struct PDFExportService: Sendable {
 
     // MARK: - Filename & temp files
 
-    /// `<TemplateName> – <yyyy-MM-dd>.pdf`. Never includes patient data.
-    static func defaultFileName(for template: Template, on date: Date = .now) -> String {
+    /// `<TemplateName> – <PatientName> – <yyyy-MM-dd>.pdf`, or without the
+    /// patient segment when no patient-name field is filled. Including the
+    /// patient name is a deliberate user decision (2026-07-17) that
+    /// supersedes the original never-in-filename rule; it only ever comes
+    /// from a field the user explicitly typed into.
+    static func defaultFileName(
+        for template: Template,
+        patientName: String? = nil,
+        on date: Date = .now
+    ) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
-        let safeName = template.name
-            .components(separatedBy: CharacterSet(charactersIn: "/\\:"))
+        var parts = [sanitized(template.name)]
+        if let patientName, let safePatient = nonEmpty(sanitized(patientName)) {
+            parts.append(safePatient)
+        }
+        parts.append(formatter.string(from: date))
+        return parts.joined(separator: " – ") + ".pdf"
+    }
+
+    private static func sanitized(_ name: String) -> String {
+        name.components(separatedBy: CharacterSet(charactersIn: "/\\:"))
             .joined(separator: "-")
-        return "\(safeName) – \(formatter.string(from: date)).pdf"
+    }
+
+    private static func nonEmpty(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     /// Exported files are staged here for the share sheet, then purged on
@@ -61,14 +81,29 @@ nonisolated struct PDFExportService: Sendable {
             throw PDFExportError.emptyDocument
         }
 
+        // Embedded source: the full fill payload rides in the "Keywords"
+        // Info key so an exported PDF can be reopened for re-editing.
+        // It MUST be a documented Info key — CGPDFContext silently drops
+        // custom keys (lesson learned empirically in the user's EYEreport
+        // app; Keywords carried a 120KB payload intact there).
+        let payload = FillSessionPayload(
+            templateID: template.id,
+            templateName: template.name,
+            values: values
+        )
+        let payloadString = try payload.embeddedString()
+
         let format = UIGraphicsPDFRendererFormat()
-        format.documentInfo = [kCGPDFContextCreator as String: "Form Filler"]
+        format.documentInfo = [
+            kCGPDFContextCreator as String: "Form Filler",
+            kCGPDFContextKeywords as String: payloadString,
+        ]
         let renderer = UIGraphicsPDFRenderer(
             bounds: CGRect(x: 0, y: 0, width: 612, height: 792),
             format: format
         )
 
-        return renderer.pdfData { rendererContext in
+        let data = renderer.pdfData { rendererContext in
             for pageIndex in 0..<document.pageCount {
                 guard let page = document.page(at: pageIndex) else { continue }
                 let space = PageCoordinateSpace(page: page)
@@ -88,6 +123,61 @@ nonisolated struct PDFExportService: Sendable {
                 }
             }
         }
+        return ensuringEmbeddedSource(data, payloadString: payloadString)
+    }
+
+    // MARK: - Embedded fill payload
+
+    /// Some render paths have been observed (on device, in EYEreport) to
+    /// drop the documentInfo write. If the rendered bytes lack a readable
+    /// payload, re-serialize ONCE through PDFKit's keywords attribute —
+    /// page content is preserved. Keep BOTH writers pointed at Keywords.
+    private func ensuringEmbeddedSource(_ data: Data, payloadString: String) -> Data {
+        if Self.embeddedPayload(in: data) != nil { return data }
+        guard let document = PDFDocument(data: data) else { return data }
+        var attributes = document.documentAttributes ?? [:]
+        attributes[PDFDocumentAttribute.keywordsAttribute] = payloadString
+        document.documentAttributes = attributes
+        guard let rewritten = document.dataRepresentation(),
+              Self.embeddedPayload(in: rewritten) != nil else { return data }
+        return rewritten
+    }
+
+    /// Reads the fill payload back out of an exported PDF, or nil if the
+    /// PDF wasn't produced by this app (or a pipeline stripped its Info).
+    static func embeddedPayload(in data: Data) -> FillSessionPayload? {
+        for keywords in keywordsCandidates(in: data) {
+            if let payload = FillSessionPayload.fromEmbeddedString(keywords) {
+                return payload
+            }
+        }
+        return nil
+    }
+
+    /// Keywords via CGPDFDocument.info (the write path's ground truth),
+    /// plus PDFKit's read as a fallback — it surfaces the attribute as
+    /// either a string or an array depending on how the PDF was written.
+    private static func keywordsCandidates(in data: Data) -> [String] {
+        var candidates: [String] = []
+        if let provider = CGDataProvider(data: data as CFData),
+           let document = CGPDFDocument(provider),
+           let info = document.info {
+            var stringRef: CGPDFStringRef?
+            if CGPDFDictionaryGetString(info, "Keywords", &stringRef),
+               let stringRef,
+               let text = CGPDFStringCopyTextString(stringRef) {
+                candidates.append(text as String)
+            }
+        }
+        if let attributes = PDFDocument(data: data)?.documentAttributes {
+            let keywords = attributes[PDFDocumentAttribute.keywordsAttribute]
+            if let text = keywords as? String {
+                candidates.append(text)
+            } else if let list = keywords as? [String] {
+                candidates.append(contentsOf: list)
+            }
+        }
+        return candidates
     }
 
     /// Draws the original page (vector) upright into the y-down output
@@ -147,7 +237,7 @@ nonisolated struct PDFExportService: Sendable {
             attributed.draw(at: CGPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2))
         case .multiLineText:
             attributed.draw(with: rect, options: options, context: nil)
-        case .singleLineText, .date, .staticText:
+        case .singleLineText, .date, .staticText, .patientName:
             let unbounded = CGFloat.greatestFiniteMagnitude
             let textHeight = attributed.boundingRect(
                 with: CGSize(width: unbounded, height: unbounded),

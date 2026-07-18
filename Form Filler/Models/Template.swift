@@ -56,4 +56,11 @@ nonisolated struct Template: Codable, Identifiable, Equatable, Sendable {
     var orderedFields: [FieldDefinition] {
         fields.sorted { ($0.sortOrder, $0.name) < ($1.sortOrder, $1.name) }
     }
+
+    /// The template's single patient-name field, if one exists. The editor
+    /// enforces at most one; if old data somehow has several, the first in
+    /// fill order wins.
+    var patientNameField: FieldDefinition? {
+        orderedFields.first { $0.type == .patientName }
+    }
 }

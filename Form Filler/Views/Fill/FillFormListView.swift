@@ -20,7 +20,7 @@ struct FillFormListView: View {
                     row(for: field)
                 }
             } footer: {
-                Text("Entries are never saved — they exist only until you leave this screen. Only the exported PDF contains what you type.")
+                Text("Entries autosave to an encrypted draft that never leaves this iPad, so you can safely leave and come back. \"Clear form\" deletes the draft; only the exported PDF is shared.")
             }
         }
         .toolbar {
@@ -58,16 +58,25 @@ struct FillFormListView: View {
     @ViewBuilder
     private func row(for field: FieldDefinition) -> some View {
         switch field.type {
-        case .singleLineText:
+        case .singleLineText, .patientName:
             labeled(field) {
                 TextField("Enter \(field.name.lowercased())", text: textBinding(for: field))
+                    .textInputAutocapitalization(.never)   // user decision: no forced capitals (breaks emails)
                     .focused($focusedFieldID, equals: field.id)
             }
         case .multiLineText:
             labeled(field) {
-                TextField("Enter \(field.name.lowercased())", text: textBinding(for: field), axis: .vertical)
-                    .lineLimit(3...8)
+                // TextEditor, not a vertical TextField: Return must insert
+                // a carriage return inside the field, and Tab (intercepted
+                // below) must move to the next field instead of indenting.
+                TextEditor(text: textBinding(for: field))
+                    .textInputAutocapitalization(.never)
+                    .frame(minHeight: 88, maxHeight: 200)
+                    .fixedSize(horizontal: false, vertical: true)
                     .focused($focusedFieldID, equals: field.id)
+                    .onKeyPress(.tab, phases: .down) { press in
+                        moveFocus(from: field, backward: press.modifiers.contains(.shift))
+                    }
             }
         case .date:
             dateRow(for: field)
@@ -76,6 +85,16 @@ struct FillFormListView: View {
         case .staticText:
             EmptyView()   // never in formFields
         }
+    }
+
+    /// Tab / Shift-Tab inside a multi-line field: keep the tab-between-
+    /// fields flow instead of inserting a tab character.
+    private func moveFocus(from field: FieldDefinition, backward: Bool) -> KeyPress.Result {
+        guard let target = viewModel.textFieldID(adjacentTo: field.id, offset: backward ? -1 : 1) else {
+            return .handled   // at either end: swallow the tab, keep focus
+        }
+        focusedFieldID = target
+        return .handled
     }
 
     private func labeled(_ field: FieldDefinition, @ViewBuilder control: () -> some View) -> some View {

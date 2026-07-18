@@ -18,6 +18,9 @@ nonisolated enum FieldType: String, Codable, CaseIterable, Sendable {
     case date
     case checkbox
     case staticText
+    /// Single-line text whose value also feeds the export filename.
+    /// At most one per template (enforced by the editor inspector).
+    case patientName
 
     /// Unknown raw values (from a newer schema) fall back to plain text
     /// rather than failing the whole template decode.
@@ -33,6 +36,7 @@ nonisolated enum FieldType: String, Codable, CaseIterable, Sendable {
         case .date: "Date"
         case .checkbox: "Checkbox"
         case .staticText: "Static Text"
+        case .patientName: "Patient Name"
         }
     }
 }

@@ -26,7 +26,7 @@ nonisolated enum FieldValueFormatting {
             let formatter = DateFormatter()
             formatter.dateFormat = field.dateFormat ?? defaultDateFormat
             return formatter.string(from: date)
-        case .singleLineText, .multiLineText:
+        case .singleLineText, .multiLineText, .patientName:
             guard case .text(let string) = value, !string.isEmpty else { return nil }
             return string
         }

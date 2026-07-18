@@ -35,10 +35,10 @@ struct FieldInspectorForm: View {
                     Label("All Fields", systemImage: "chevron.backward")
                 }
             }
-            Section("Field") {
+            Section {
                 TextField("Name", text: binding(\.name, default: ""))
                 Picker("Type", selection: binding(\.type, default: .singleLineText)) {
-                    ForEach(FieldType.allCases, id: \.self) { type in
+                    ForEach(availableTypes, id: \.self) { type in
                         Text(type.displayName).tag(type)
                     }
                 }
@@ -54,6 +54,12 @@ struct FieldInspectorForm: View {
                         .lineLimit(1...3)
                 }
                 LabeledContent("Page", value: "\(field.pageIndex + 1)")
+            } header: {
+                Text("Field")
+            } footer: {
+                if field.type == .patientName {
+                    Text("The patient's name is added to the exported PDF's file name. One patient-name field per form.")
+                }
             }
             Section("Text Style") {
                 Picker("Font", selection: binding(\.style.fontName, default: "Helvetica")) {
@@ -100,6 +106,17 @@ struct FieldInspectorForm: View {
                     viewModel.deleteSelected()
                 }
             }
+        }
+    }
+
+    /// All field types, minus Patient Name when another field already
+    /// claims it — at most one per template, since its value feeds the
+    /// export filename.
+    private var availableTypes: [FieldType] {
+        FieldType.allCases.filter { type in
+            guard type == .patientName else { return true }
+            guard let taken = viewModel.template.patientNameField else { return true }
+            return taken.id == viewModel.selectedFieldID
         }
     }
 
