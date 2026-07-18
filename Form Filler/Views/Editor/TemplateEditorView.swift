@@ -29,6 +29,7 @@ struct TemplateEditorView: View {
         }
         .navigationTitle(viewModel.template.name)
         .navigationBarTitleDisplayMode(.inline)
+        .sensoryFeedback(.selection, trigger: viewModel.selectedFieldID)
         .alert("Couldn't Save", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
         } message: {

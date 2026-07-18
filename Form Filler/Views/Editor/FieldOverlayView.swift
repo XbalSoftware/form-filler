@@ -75,6 +75,8 @@ struct FieldOverlayView: View {
             .position(x: displayRect.midX, y: displayRect.midY)
             .onTapGesture(perform: onTap)
             .gesture(moveGesture)
+            .accessibilityLabel("\(field.name), \(field.type.displayName) field")
+            .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
     private var moveGesture: some Gesture {

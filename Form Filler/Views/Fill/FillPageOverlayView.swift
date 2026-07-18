@@ -52,6 +52,8 @@ private struct FillFieldOverlay: View {
         .frame(width: viewRect.width, height: viewRect.height)
         .position(x: viewRect.midX, y: viewRect.midY)
         .contentShape(Rectangle())
+        .accessibilityLabel("\(field.name): \(text ?? "empty")")
+        .accessibilityAddTraits(.isButton)
     }
 
     @ViewBuilder
@@ -68,11 +70,15 @@ private struct FillFieldOverlay: View {
 
     private func fittedText(_ text: String) -> some View {
         // Fit in PDF points (export-identical), then scale for display.
+        // The fit box is the *display-space* size — on rotated pages the
+        // PDF-space rect has width/height swapped, and the export fits
+        // against display space too.
+        let fitBox = CGSize(width: viewRect.width / scale, height: viewRect.height / scale)
         let fittedPDFSize = TextFitting.fittedFontSize(
             for: text,
             fontName: field.style.fontName,
             preferredSize: field.style.fontSize,
-            in: field.rect.size,
+            in: fitBox,
             multiline: field.type == .multiLineText
         )
         return Text(text)

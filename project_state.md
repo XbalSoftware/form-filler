@@ -8,15 +8,16 @@
 
 ## Current status
 
-**Stage 5 — code complete, unverified.** Stages 1–4 are done (user-confirmed on device 2026-07-17). Stage 5 code is written and awaits user verification:
+**Stage 6 — code complete, unverified.** Stages 1–5 are done (user-confirmed on device 2026-07-17). Stage 6 (the final roadmap stage) is written and awaits user verification:
 
-1. ⌘U — 33 existing + 11 new tests (`FieldValueFormattingTests`, `TextFittingTests`) must all pass.
-2. On iPad: template detail → **Fill Form** (enabled once the template has fields). Two panes: entry form left, live preview right.
-3. Exercise: type into text fields (value appears on the page live; overlong text auto-shrinks); date fields via "Set Date" → date picker (per-field format); checkboxes render "X" (toggle from the form *or* by tapping the box on the preview); focused field highlighted on the page; keyboard ▲/▼ moves through text fields and jumps pages.
-4. Invariant #3 check: fill some fields, leave the screen, come back — everything must be empty. Nothing is ever written to disk.
-5. Editor additions: date fields now have a Date Format picker; Static Text fields have a text box for their fixed content.
+1. ⌘U — 44 existing + 6 new tests (`PDFExportServiceTests`) must all pass.
+2. Fill a form → **Export** (share sheet): receivers get a URL to a real `.pdf` file named `<Template> – <yyyy-MM-dd>.pdf`. **Critical user requirement: verify the EMR accepts it from the share sheet.**
+3. Verify exported PDF fidelity: AirDrop/save a copy and open in Preview.app, Acrobat, and Files Quick Look — original page content crisp (vector, not rasterized), values exactly where the preview showed them, auto-shrunk text matching.
+4. Share sheet also covers Save to Files and Print — try both.
+5. Back button in fill mode now confirms before discarding entered values; Clear All unchanged; exported temp files are purged on app launch and when leaving the fill screen.
+6. If a rotated (scanned sideways) PDF is available: export it and confirm orientation is correct — rotation handling uses Quartz's documented `getDrawingTransform` but deserves a real-world check.
 
-Then Stage 6 (export + polish) begins — the Export button is already in the fill toolbar, disabled.
+After verification: the roadmap is complete. Remaining niceties live under "Future".
 
 ---
 
@@ -63,7 +64,7 @@ Work strictly one stage at a time. A stage is done when it compiles, its tests p
 - ✅ Gesture model: one finger edits, two fingers pan/pinch (`panRequiresTwoTouches` on ZoomablePageContainer)
 - ✅ 9 new tests: `EdgeSnappingTests` + `ColorHexTests` (`Support/ColorHex.swift`)
 
-### Stage 5 — Fill mode  ◐ (code written 2026-07-17; awaiting user verification)
+### Stage 5 — Fill mode  ✅ (done; user-confirmed on device 2026-07-17)
 - ✅ Two-pane layout: `FillSessionView` = ordered form list (360pt, `FillFormListView`) + live preview with value overlays (`FillPageOverlayView` in PageCanvasView's overlay slot)
 - ✅ In-memory `[UUID: FieldValue]` only (`FillSessionViewModel`); Clear All with confirmation; PHI footer note in the form
 - ✅ Keyboard toolbar ▲/▼/Done cycling text fields; focus ↔ preview sync both ways (focused field highlighted, page auto-jumps); preview taps: checkbox toggles, text/date focuses
@@ -72,12 +73,14 @@ Work strictly one stage at a time. A stage is done when it compiles, its tests p
 - ✅ `FieldDefinition` gained optional `dateFormat` + `staticText` (defensive decode; old templates unaffected); static-text content editable in inspector, rendered on preview, excluded from the form
 - ✅ 11 new tests (`FillSupportTests.swift`)
 
-### Stage 6 — Export + polish  ☐
-- `PDFExportService`: Core Graphics re-render (CLAUDE.md invariant #5), incl. rotated pages
-- Auto-shrink applied identically at export (single shared fit function)
-- Share Sheet, Save to Files, Print; default filename `<TemplateName> – <yyyy-MM-dd>.pdf`
-- Verify exported PDF fidelity in Preview.app, Acrobat, and iOS Files Quick Look
-- Polish pass: empty states, error alerts, haptics, accessibility labels
+### Stage 6 — Export + polish  ◐ (code written 2026-07-17; awaiting user verification)
+- ✅ `PDFExportService`: Core Graphics re-render — vector page content via `CGPDFPage` + `getDrawingTransform` (rotation/mediaBox-aware, Decision #21), values drawn as attributed strings in display space via the shared `PageCoordinateSpace` math
+- ✅ Auto-shrink identical at export: same `TextFitting` call, same display-space fit box as the preview (a rotated-page fit bug in the preview was found & fixed during this work)
+- ✅ Share via `ShareLink` + `FileRepresentation` (`ExportedFormPDF`): receivers get a URL to a named `.pdf` file — **required for the user's EMR software**; covers AirDrop, Save to Files, Print; default filename `<TemplateName> – <yyyy-MM-dd>.pdf` (sanitized, never contains patient data)
+- ✅ Temp-file hygiene: exports staged in `tmp/Exports/`, purged at app launch and on leaving the fill screen
+- ✅ Polish: back-button discard confirmation in fill mode; editor selection haptic; accessibility labels on editor + fill overlays
+- ✅ 6 new tests (`PDFExportServiceTests`): output re-parsed — page count/size, original content survives, values + static text extractable as real PDF text, per-page assignment, source bytes untouched (invariant #1), filename sanitization
+- ☐ User fidelity verification (Preview/Acrobat/Quick Look, EMR acceptance, rotated-scan orientation)
 
 ### Future (do not build without explicit request)
 Searchable library · favorites · recently used · auto-fill doctor/clinic profile · patient database · Apple Pencil annotations · image insertion · signatures · cloud sync · OCR · intelligent field detection · template library import/export (zip of template folders) · multiple fonts / rich formatting · batch export
@@ -108,6 +111,8 @@ Searchable library · favorites · recently used · auto-fill doctor/clinic prof
 | 18 | `FieldDefinition` gained optional `dateFormat` and `staticText` (defensive decode) | Roadmap requires per-field date format + static-text content; canonical model had nowhere to store them | 2026-07-17 |
 | 19 | Default date format dd/MM/yyyy | Australian/UK convention for the app's owner; overridable per field | 2026-07-17 |
 | 20 | Date fields start unset ("Set Date" button) rather than pre-filled with today | Empty overlay until deliberately set; no accidental wrong dates on exports | 2026-07-17 |
+| 21 | Export draws page content via `CGPDFPage.getDrawingTransform` + `drawPDFPage`, not `PDFPage.draw(with:to:)` | Deviates from invariant #5's letter, honors its spirit (vector CG re-render, no flattening); Quartz's transform API has documented /Rotate + mediaBox handling vs. PDFKit's underdocumented draw behavior | 2026-07-17 |
+| 22 | Share via ShareLink + FileRepresentation handing receivers a URL to a named .pdf file | User's EMR only accepts share-sheet items that are URLs to PDF files; also gives every receiver a proper filename | 2026-07-17 |
 
 ## Assumptions awaiting user confirmation
 
@@ -123,8 +128,9 @@ Searchable library · favorites · recently used · auto-fill doctor/clinic prof
 - Page rotation handling is the likeliest source of subtle bugs — covered by mandatory tests in Stage 3.
 - Scanned PDFs can have unusual mediaBox origins (non-zero); conversion helpers must use the mediaBox, never assume (0,0).
 - Large scanned PDFs: render at capped scale and cache; watch memory on multi-page documents.
-- Fill mode: an accidental back-swipe discards all entered values without confirmation (values are ephemeral by design, invariant #3). Consider a "discard entries?" confirmation in the Stage 6 polish pass.
-- Fill preview text uses SwiftUI layout while export will use Core Graphics — same fitted font size via shared TextFitting, but baseline placement could differ by a point or two; verify side-by-side in Stage 6.
+- ~~Fill mode: an accidental back-swipe discards all entered values without confirmation~~ — fixed in Stage 6 (custom back button with discard confirmation; note the edge-swipe-back gesture is disabled on the fill screen as a side effect).
+- Fill preview text uses SwiftUI layout while export uses Core Graphics — same fitted font size via shared TextFitting, but baseline placement could differ by a point or two; user should verify side-by-side.
+- Rotated-page export uses Quartz `getDrawingTransform` (documented) but hasn't been verified against a real sideways-scanned PDF yet.
 
 ---
 
@@ -139,3 +145,4 @@ Searchable library · favorites · recently used · auto-fill doctor/clinic prof
 - **2026-07-17 (d)** — Stage 2 confirmed (after adding a missing `import UniformTypeIdentifiers` to LibraryView — MemberImportVisibility strikes again; remember explicit imports for every module a file touches). Stage 3 written: `PageCoordinateSpace` in Support/CoordinateConversion.swift (rotation math derived for clockwise /Rotate: pdf bottom-left corner lands top-left at 90°, top-right at 180°, bottom-right at 270°); `PDFRenderService` (@unchecked Sendable — read-only PDFDocument + thread-safe NSCache); `ZoomablePageContainer` (UIScrollView + UIHostingController, content centered via insets, `onStableZoomChange` on gesture end); `PageCanvasView` (fit + `.task(id:)` render keyed on page/width/zoom, `@Environment(\.displayScale)`); `PageStripView`; TemplateDetailView now shows the live canvas; debug seed PDF grew a second page ("Continuation Sheet", one multi-line field, pageIndex 1). 11 new coordinate tests. Next: user verifies (tests + zoom/pan/page-switch on iPad) → Stage 4 (template editor).
 - **2026-07-17 (e)** — Stage 3 confirmed (one fix en route: `nonisolated` restated on the `PageCoordinateSpace.init(page:)` extension — extensions don't inherit the type's `nonisolated` under MainActor-by-default; add `nonisolated` to every extension member intended to be non-main-actor). Stage 4 written: `TemplateEditorViewModel` (all mutations + immediate persist + `onPersist`→library refresh); `Views/Editor/` = TemplateEditorView (canvas + 320pt inspector, save-error alert), EditorPageOverlayView (tap-catcher: deselect-or-create; named coordinate space "editorPage"), FieldOverlayView (move drag w/ live snap, 4 resize handles w/ −10pt inset touch targets), FieldListView (EditMode reorder), FieldInspectorForm (keyPath-based bindings into `updateSelectedField`); `EdgeSnapping` + `ColorHex` in Support with 9 tests; `FieldType.displayName`; ZoomablePageContainer gained `panRequiresTwoTouches` (Decision #15). Detail-screen Edit button now live via `EditorRoute` navigationDestination. Decisions #15–17 logged. Next: user verifies → Stage 5 (fill mode).
 - **2026-07-17 (f)** — Stage 4 confirmed (two build fixes en route: `getRed` argument labels; replaced SwiftUI-only `Array.move(fromOffsets:toOffset:)` with a hand-rolled reorder to keep the VM UI-free). Stage 5 written: `FieldDefinition` + `dateFormat`/`staticText` (Decision #18); shared `TextFitting` (fit in PDF points; preview scales the result — export must call the same function) and `FieldValueFormatting`; `FillSessionViewModel` (transient values, focus/page sync, overlay taps, keyboard-adjacency); `Views/Fill/` = FillSessionView (360pt form + preview, Clear All confirmation, disabled Export placeholder for Stage 6), FillFormListView (@FocusState ↔ VM two-way sync with equality guards, keyboard ▲/▼/Done, "Set Date"/clear pattern), FillPageOverlayView (fitted text, dashed empty outlines, focus highlight); inspector gained date-format picker + static-text box; detail Fill button live (disabled when no fields). 11 new tests. Decisions #18–20, two new Known issues (back-swipe discard; preview-vs-export baseline). Next: user verifies → Stage 6 (export + polish).
+- **2026-07-17 (g)** — Stage 5 confirmed (one build fix: ambiguous `.greatestFiniteMagnitude` needed explicit `CGFloat`). Stage 6 written — user requirement surfaced: **EMR software only accepts share-sheet items that are URLs to PDF files** → `ExportedFormPDF` Transferable with `FileRepresentation(exportedContentType: .pdf)` returning `SentTransferredFile` (Decision #22). `PDFExportService`: CGPDFPage vector re-render (Decision #21), values drawn in display space (shared PageCoordinateSpace/TextFitting/FieldValueFormatting), per-field pages, filename `<Name> – <yyyy-MM-dd>.pdf` sanitized. Found+fixed rotated-page fit bug in FillFieldOverlay (was fitting against PDF-space rect; now display-space, matching export). Temp exports in `tmp/Exports/` purged at launch + fill-screen exit. Polish: fill back-button discard confirmation, editor selection haptic, overlay accessibility labels. 6 new tests (50 total). Next: user verifies (incl. EMR acceptance + fidelity in Preview/Acrobat/Quick Look + rotated scan) → roadmap complete; future work only from the "Future" list.

@@ -16,6 +16,9 @@ struct FillRoute: Hashable {
 struct FillSessionView: View {
     @State private var viewModel: FillSessionViewModel
     @State private var isConfirmingClear = false
+    @State private var isConfirmingDiscard = false
+
+    @Environment(\.dismiss) private var dismiss
 
     init(viewModel: FillSessionViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -30,16 +33,29 @@ struct FillSessionView: View {
         }
         .navigationTitle(viewModel.template.name)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Back", systemImage: "chevron.backward") {
+                    if viewModel.hasAnyValues {
+                        isConfirmingDiscard = true
+                    } else {
+                        dismiss()
+                    }
+                }
+            }
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button("Clear All", systemImage: "eraser") {
                     isConfirmingClear = true
                 }
                 .disabled(!viewModel.hasAnyValues)
-                Button("Export", systemImage: "square.and.arrow.up") {
-                    // Stage 6: PDF export
+                ShareLink(
+                    item: viewModel.makeExportItem(),
+                    preview: SharePreview(viewModel.exportFileName)
+                ) {
+                    Label("Export", systemImage: "square.and.arrow.up")
                 }
-                .disabled(true)
+                .disabled(!viewModel.hasExportableContent)
             }
         }
         .confirmationDialog(
@@ -48,6 +64,19 @@ struct FillSessionView: View {
             titleVisibility: .visible
         ) {
             Button("Clear All", role: .destructive) { viewModel.clearAll() }
+        }
+        .confirmationDialog(
+            "Discard entered values?",
+            isPresented: $isConfirmingDiscard,
+            titleVisibility: .visible
+        ) {
+            Button("Discard and Leave", role: .destructive) { dismiss() }
+            Button("Keep Editing", role: .cancel) {}
+        } message: {
+            Text("Entries are never saved. Leaving this screen discards them.")
+        }
+        .onDisappear {
+            PDFExportService.purgeTemporaryExports()
         }
     }
 

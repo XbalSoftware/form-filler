@@ -16,6 +16,7 @@ import Observation
 final class FillSessionViewModel {
     let template: Template
     let renderService: PDFRenderService?
+    let pdfURL: URL
 
     var values: [UUID: FieldValue] = [:]
     var focusedFieldID: UUID?
@@ -23,7 +24,26 @@ final class FillSessionViewModel {
 
     init(template: Template, store: TemplateStore) {
         self.template = template
-        self.renderService = PDFRenderService(url: store.pdfURL(for: template))
+        self.pdfURL = store.pdfURL(for: template)
+        self.renderService = PDFRenderService(url: pdfURL)
+    }
+
+    /// True once anything would actually print (including static text).
+    var hasExportableContent: Bool {
+        template.fields.contains { displayText(for: $0) != nil }
+    }
+
+    var exportFileName: String {
+        PDFExportService.defaultFileName(for: template)
+    }
+
+    func makeExportItem() -> ExportedFormPDF {
+        ExportedFormPDF(
+            template: template,
+            values: values,
+            sourceURL: pdfURL,
+            fileName: exportFileName
+        )
     }
 
     /// Fields the user fills in, in fill order. Static text is rendered
