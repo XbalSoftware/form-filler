@@ -43,7 +43,8 @@ private func makeSampleTemplate() -> Template {
                 type: .date,
                 pageIndex: 0,
                 rect: CGRect(x: 400, y: 700, width: 120, height: 20),
-                sortOrder: 2
+                sortOrder: 2,
+                dateFormat: "yyyy-MM-dd"
             ),
             FieldDefinition(
                 name: "Urgent",
@@ -58,7 +59,8 @@ private func makeSampleTemplate() -> Template {
                 pageIndex: 0,
                 rect: CGRect(x: 40, y: 750, width: 300, height: 20),
                 style: FieldStyle(fontName: "Helvetica", fontSize: 14, alignment: .center, colorHex: "#003366"),
-                sortOrder: 4
+                sortOrder: 4,
+                staticText: "Anytown Eye Clinic — Referrals"
             ),
         ]
     )

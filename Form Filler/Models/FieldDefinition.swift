@@ -22,6 +22,10 @@ nonisolated struct FieldDefinition: Codable, Identifiable, Equatable, Sendable {
     var rect: CGRect
     var style: FieldStyle
     var sortOrder: Int
+    /// Date fields only: DateFormatter format string. nil = app default.
+    var dateFormat: String?
+    /// Static-text fields only: the fixed text stamped on every fill.
+    var staticText: String?
 
     init(
         id: UUID = UUID(),
@@ -30,7 +34,9 @@ nonisolated struct FieldDefinition: Codable, Identifiable, Equatable, Sendable {
         pageIndex: Int = 0,
         rect: CGRect,
         style: FieldStyle = .default,
-        sortOrder: Int = 0
+        sortOrder: Int = 0,
+        dateFormat: String? = nil,
+        staticText: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -39,6 +45,8 @@ nonisolated struct FieldDefinition: Codable, Identifiable, Equatable, Sendable {
         self.rect = rect
         self.style = style
         self.sortOrder = sortOrder
+        self.dateFormat = dateFormat
+        self.staticText = staticText
     }
 
     init(from decoder: any Decoder) throws {
@@ -51,5 +59,7 @@ nonisolated struct FieldDefinition: Codable, Identifiable, Equatable, Sendable {
             ?? CGRect(origin: .zero, size: Self.defaultSize)
         style = try container.decodeIfPresent(FieldStyle.self, forKey: .style) ?? .default
         sortOrder = try container.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
+        dateFormat = try container.decodeIfPresent(String.self, forKey: .dateFormat)
+        staticText = try container.decodeIfPresent(String.self, forKey: .staticText)
     }
 }

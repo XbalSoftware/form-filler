@@ -70,6 +70,10 @@ final class LibraryViewModel {
         }
     }
 
+    func makeFillSessionViewModel(for template: Template) -> FillSessionViewModel {
+        FillSessionViewModel(template: template, store: store)
+    }
+
     // MARK: - Import
 
     /// Reads and validates a picked file. Returns nil (and sets the error

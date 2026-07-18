@@ -35,6 +35,13 @@ struct LibraryView: View {
                         ContentUnavailableView("Template Not Found", systemImage: "questionmark.folder")
                     }
                 }
+                .navigationDestination(for: FillRoute.self) { route in
+                    if let template = viewModel.template(withID: route.templateID) {
+                        FillSessionView(viewModel: viewModel.makeFillSessionViewModel(for: template))
+                    } else {
+                        ContentUnavailableView("Template Not Found", systemImage: "questionmark.folder")
+                    }
+                }
         }
         .fileImporter(isPresented: $isPickingFile, allowedContentTypes: [.pdf]) { result in
             switch result {

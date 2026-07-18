@@ -42,6 +42,17 @@ struct FieldInspectorForm: View {
                         Text(type.displayName).tag(type)
                     }
                 }
+                if field.type == .date {
+                    Picker("Date Format", selection: dateFormatBinding) {
+                        ForEach(Self.dateFormatOptions, id: \.self) { format in
+                            Text(Self.formatPreview(format)).tag(format)
+                        }
+                    }
+                }
+                if field.type == .staticText {
+                    TextField("Static text (printed on every form)", text: staticTextBinding, axis: .vertical)
+                        .lineLimit(1...3)
+                }
                 LabeledContent("Page", value: "\(field.pageIndex + 1)")
             }
             Section("Text Style") {
@@ -106,6 +117,32 @@ struct FieldInspectorForm: View {
         Binding(
             get: { viewModel.selectedField?[keyPath: keyPath] ?? defaultValue },
             set: { newValue in viewModel.updateSelectedField { $0[keyPath: keyPath] = newValue } }
+        )
+    }
+
+    private static let dateFormatOptions = [
+        "dd/MM/yyyy", "d MMM yyyy", "d MMMM yyyy", "MM/dd/yyyy", "yyyy-MM-dd",
+    ]
+
+    private static func formatPreview(_ format: String) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = format
+        return formatter.string(from: .now)
+    }
+
+    private var dateFormatBinding: Binding<String> {
+        Binding(
+            get: { viewModel.selectedField?.dateFormat ?? FieldValueFormatting.defaultDateFormat },
+            set: { newValue in viewModel.updateSelectedField { $0.dateFormat = newValue } }
+        )
+    }
+
+    private var staticTextBinding: Binding<String> {
+        Binding(
+            get: { viewModel.selectedField?.staticText ?? "" },
+            set: { newValue in
+                viewModel.updateSelectedField { $0.staticText = newValue.isEmpty ? nil : newValue }
+            }
         )
     }
 

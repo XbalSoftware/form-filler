@@ -54,14 +54,12 @@ struct TemplateDetailView: View {
             }
             .buttonStyle(.bordered)
 
-            Button {
-                // Stage 5: fill mode
-            } label: {
+            NavigationLink(value: FillRoute(templateID: template.id)) {
                 Label("Fill Form", systemImage: "pencil.and.list.clipboard")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
-            .disabled(true)
+            .disabled(template.fields.isEmpty)
         }
         .controlSize(.large)
         .frame(maxWidth: 560)

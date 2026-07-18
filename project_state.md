@@ -8,14 +8,15 @@
 
 ## Current status
 
-**Stage 4 — code complete, unverified.** Stages 1–3 are done (user-confirmed on device 2026-07-17). Stage 4 code is written and awaits user verification:
+**Stage 5 — code complete, unverified.** Stages 1–4 are done (user-confirmed on device 2026-07-17). Stage 5 code is written and awaits user verification:
 
-1. ⌘U — 24 existing + 9 new tests (`EdgeSnappingTests`, `ColorHexTests`) must all pass.
-2. On iPad, open a template → **Edit Template** (now enabled): tap empty page → new field appears selected; drag to move (snaps to neighbors' edges); corner handles resize; two fingers pan/zoom.
-3. Inspector right side: field list (tap to select, Reorder button for fill order, swipe to delete) ↔ field form (name, type, font, size, alignment, color, frame readout, nudge arrows, duplicate, delete).
-4. Edits persist: leave the editor, force-quit the app, reopen — fields must still be there. Field count on library cards updates.
+1. ⌘U — 33 existing + 11 new tests (`FieldValueFormattingTests`, `TextFittingTests`) must all pass.
+2. On iPad: template detail → **Fill Form** (enabled once the template has fields). Two panes: entry form left, live preview right.
+3. Exercise: type into text fields (value appears on the page live; overlong text auto-shrinks); date fields via "Set Date" → date picker (per-field format); checkboxes render "X" (toggle from the form *or* by tapping the box on the preview); focused field highlighted on the page; keyboard ▲/▼ moves through text fields and jumps pages.
+4. Invariant #3 check: fill some fields, leave the screen, come back — everything must be empty. Nothing is ever written to disk.
+5. Editor additions: date fields now have a Date Format picker; Static Text fields have a text box for their fixed content.
 
-Then Stage 5 (fill mode) begins.
+Then Stage 6 (export + polish) begins — the Export button is already in the fill toolbar, disabled.
 
 ---
 
@@ -54,7 +55,7 @@ Work strictly one stage at a time. A stage is done when it compiles, its tests p
 - ✅ Multi-page: `PageStripView` thumbnail strip (shown when pageCount > 1); debug seed PDF now has 2 pages
 - ✅ **11 `CoordinateConversionTests`** (corner mapping per rotation, offset mediaBox, scaling, round-trips, normalization, degenerate sizes) — written; must be green before Stage 4
 
-### Stage 4 — Template editor  ◐ (code written 2026-07-17; awaiting user verification)
+### Stage 4 — Template editor  ✅ (done; user-confirmed on device 2026-07-17)
 - ✅ Tap to place field (default 180×24pt, centered on tap, clamped to page); drag to move; 4 corner handles to resize (min 16×10 view pts)
 - ✅ Inspector: field list in fill order (tap-select, Reorder mode rewrites sortOrder, swipe-delete) ↔ field form (name, type, PDF-safe font list, size stepper 6–36, alignment segmented, ColorPicker→hex)
 - ✅ Duplicate field (+12/−12pt offset), delete, 1-pt nudge arrows (screen-direction, rotation-aware), light edge-snapping (`Support/EdgeSnapping.swift`, 6pt tolerance, nearest edge, per-axis)
@@ -62,12 +63,14 @@ Work strictly one stage at a time. A stage is done when it compiles, its tests p
 - ✅ Gesture model: one finger edits, two fingers pan/pinch (`panRequiresTwoTouches` on ZoomablePageContainer)
 - ✅ 9 new tests: `EdgeSnappingTests` + `ColorHexTests` (`Support/ColorHex.swift`)
 
-### Stage 5 — Fill mode  ☐
-- Two-pane layout: ordered form list (left) + live page preview with value overlays (right)
-- In-memory `[UUID: FieldValue]` only — no persistence (CLAUDE.md invariant #3)
-- Keyboard toolbar: next/previous field
-- Date picker with per-field format string; checkbox toggle rendering "X"
-- Auto-shrink font-to-fit behavior in the preview overlays (shared logic with export)
+### Stage 5 — Fill mode  ◐ (code written 2026-07-17; awaiting user verification)
+- ✅ Two-pane layout: `FillSessionView` = ordered form list (360pt, `FillFormListView`) + live preview with value overlays (`FillPageOverlayView` in PageCanvasView's overlay slot)
+- ✅ In-memory `[UUID: FieldValue]` only (`FillSessionViewModel`); Clear All with confirmation; PHI footer note in the form
+- ✅ Keyboard toolbar ▲/▼/Done cycling text fields; focus ↔ preview sync both ways (focused field highlighted, page auto-jumps); preview taps: checkbox toggles, text/date focuses
+- ✅ Date picker with per-field format (`FieldDefinition.dateFormat`, default dd/MM/yyyy, editor picker); unset-until-"Set Date", clearable; checkbox renders "X"
+- ✅ Auto-shrink via shared `Support/TextFitting.swift` — fitted in PDF points, scaled to view, so preview == future export; `Support/FieldValueFormatting.swift` resolves field+value → drawn string (shared with export)
+- ✅ `FieldDefinition` gained optional `dateFormat` + `staticText` (defensive decode; old templates unaffected); static-text content editable in inspector, rendered on preview, excluded from the form
+- ✅ 11 new tests (`FillSupportTests.swift`)
 
 ### Stage 6 — Export + polish  ☐
 - `PDFExportService`: Core Graphics re-render (CLAUDE.md invariant #5), incl. rotated pages
@@ -102,6 +105,9 @@ Searchable library · favorites · recently used · auto-fill doctor/clinic prof
 | 15 | Editor gesture model: one finger edits (tap/drag/resize), two fingers pan + pinch-zoom | Standard iPad canvas-editor pattern; cleanly avoids UIScrollView vs. field-drag gesture conflicts | 2026-07-17 |
 | 16 | Editor persists on every committed mutation (no explicit Save button) | Atomic tiny JSON writes; nothing to forget; matches iOS editing conventions | 2026-07-17 |
 | 17 | Font picker offers a small PDF-safe list (Helvetica ×3, Times, Courier) | Export renders with the same names; avoids fonts that may not embed cleanly | 2026-07-17 |
+| 18 | `FieldDefinition` gained optional `dateFormat` and `staticText` (defensive decode) | Roadmap requires per-field date format + static-text content; canonical model had nowhere to store them | 2026-07-17 |
+| 19 | Default date format dd/MM/yyyy | Australian/UK convention for the app's owner; overridable per field | 2026-07-17 |
+| 20 | Date fields start unset ("Set Date" button) rather than pre-filled with today | Empty overlay until deliberately set; no accidental wrong dates on exports | 2026-07-17 |
 
 ## Assumptions awaiting user confirmation
 
@@ -117,6 +123,8 @@ Searchable library · favorites · recently used · auto-fill doctor/clinic prof
 - Page rotation handling is the likeliest source of subtle bugs — covered by mandatory tests in Stage 3.
 - Scanned PDFs can have unusual mediaBox origins (non-zero); conversion helpers must use the mediaBox, never assume (0,0).
 - Large scanned PDFs: render at capped scale and cache; watch memory on multi-page documents.
+- Fill mode: an accidental back-swipe discards all entered values without confirmation (values are ephemeral by design, invariant #3). Consider a "discard entries?" confirmation in the Stage 6 polish pass.
+- Fill preview text uses SwiftUI layout while export will use Core Graphics — same fitted font size via shared TextFitting, but baseline placement could differ by a point or two; verify side-by-side in Stage 6.
 
 ---
 
@@ -130,3 +138,4 @@ Searchable library · favorites · recently used · auto-fill doctor/clinic prof
 - **2026-07-17 (c)** — Stage 1 confirmed by user; Stage 2 written. New: `ThumbnailService` (PDFKit first-page render at 640px wide, PNG-cached in the template folder, `@concurrent` so it runs off-main, rotation-aware aspect); `LibraryViewModel` expanded (import with PDF validation via security-scoped URL, updateDetails/duplicate/delete, per-template async thumbnail loading with in-flight dedup, error alert binding); views split per the ~80-line rule: `LibraryView` (nav + sheets + dialogs), `LibraryGridView` (adaptive LazyVGrid + context menus), `TemplateCardView`, `TemplateFormSheet` (shared by import & edit-details), `TemplateDetailView` (Editor/Fill placeholders). No new unit tests (UI/rendering layer). Next: user verifies on iPad → Stage 3 (page canvas + coordinate conversion, tests mandatory before Stage 4).
 - **2026-07-17 (d)** — Stage 2 confirmed (after adding a missing `import UniformTypeIdentifiers` to LibraryView — MemberImportVisibility strikes again; remember explicit imports for every module a file touches). Stage 3 written: `PageCoordinateSpace` in Support/CoordinateConversion.swift (rotation math derived for clockwise /Rotate: pdf bottom-left corner lands top-left at 90°, top-right at 180°, bottom-right at 270°); `PDFRenderService` (@unchecked Sendable — read-only PDFDocument + thread-safe NSCache); `ZoomablePageContainer` (UIScrollView + UIHostingController, content centered via insets, `onStableZoomChange` on gesture end); `PageCanvasView` (fit + `.task(id:)` render keyed on page/width/zoom, `@Environment(\.displayScale)`); `PageStripView`; TemplateDetailView now shows the live canvas; debug seed PDF grew a second page ("Continuation Sheet", one multi-line field, pageIndex 1). 11 new coordinate tests. Next: user verifies (tests + zoom/pan/page-switch on iPad) → Stage 4 (template editor).
 - **2026-07-17 (e)** — Stage 3 confirmed (one fix en route: `nonisolated` restated on the `PageCoordinateSpace.init(page:)` extension — extensions don't inherit the type's `nonisolated` under MainActor-by-default; add `nonisolated` to every extension member intended to be non-main-actor). Stage 4 written: `TemplateEditorViewModel` (all mutations + immediate persist + `onPersist`→library refresh); `Views/Editor/` = TemplateEditorView (canvas + 320pt inspector, save-error alert), EditorPageOverlayView (tap-catcher: deselect-or-create; named coordinate space "editorPage"), FieldOverlayView (move drag w/ live snap, 4 resize handles w/ −10pt inset touch targets), FieldListView (EditMode reorder), FieldInspectorForm (keyPath-based bindings into `updateSelectedField`); `EdgeSnapping` + `ColorHex` in Support with 9 tests; `FieldType.displayName`; ZoomablePageContainer gained `panRequiresTwoTouches` (Decision #15). Detail-screen Edit button now live via `EditorRoute` navigationDestination. Decisions #15–17 logged. Next: user verifies → Stage 5 (fill mode).
+- **2026-07-17 (f)** — Stage 4 confirmed (two build fixes en route: `getRed` argument labels; replaced SwiftUI-only `Array.move(fromOffsets:toOffset:)` with a hand-rolled reorder to keep the VM UI-free). Stage 5 written: `FieldDefinition` + `dateFormat`/`staticText` (Decision #18); shared `TextFitting` (fit in PDF points; preview scales the result — export must call the same function) and `FieldValueFormatting`; `FillSessionViewModel` (transient values, focus/page sync, overlay taps, keyboard-adjacency); `Views/Fill/` = FillSessionView (360pt form + preview, Clear All confirmation, disabled Export placeholder for Stage 6), FillFormListView (@FocusState ↔ VM two-way sync with equality guards, keyboard ▲/▼/Done, "Set Date"/clear pattern), FillPageOverlayView (fitted text, dashed empty outlines, focus highlight); inspector gained date-format picker + static-text box; detail Fill button live (disabled when no fields). 11 new tests. Decisions #18–20, two new Known issues (back-swipe discard; preview-vs-export baseline). Next: user verifies → Stage 6 (export + polish).
