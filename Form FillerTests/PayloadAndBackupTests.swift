@@ -183,6 +183,42 @@ struct LibraryBackupTests {
         }
     }
 
+    @Test func backupCarriesPractitionerProfiles() throws {
+        // The profile list travels in the backup JSON and merges add-only
+        // by ID on restore. (Stores here use explicit temp files so the
+        // test never touches real app data.)
+        let profile = PractitionerProfile(
+            label: "Dr. Test — Downtown",
+            name: "Dr. Test",
+            officeAddress: "1 Example St\nAnytown",
+            officePhone: "555-0100",
+            practitionerID: "PRAC123",
+            signatureBase64: Data("fake-signature-bytes".utf8).base64EncodedString()
+        )
+        let backup = LibraryBackup(
+            entries: [],
+            practitioners: [profile]
+        )
+        let data = try TemplateStore.makeEncoder().encode(backup)
+        let decoded = try TemplateStore.makeDecoder().decode(LibraryBackup.self, from: data)
+        #expect(decoded.practitioners == [profile])
+    }
+
+    @Test func practitionerStoreRoundTrip() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "prac-test-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = PractitionerStore(directoryURL: directory)
+
+        #expect(store.load().isEmpty)
+        let profiles = [
+            PractitionerProfile(name: "Dr. A", practitionerID: "A1"),
+            PractitionerProfile(name: "Dr. B", email: "b@example.com"),
+        ]
+        try store.save(profiles)
+        #expect(store.load() == profiles)
+    }
+
     @Test func garbageIsNotABackup() throws {
         let store = try makeStore()
         defer { removeStore(store) }

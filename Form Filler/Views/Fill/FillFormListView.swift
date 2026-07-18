@@ -15,6 +15,7 @@ struct FillFormListView: View {
 
     var body: some View {
         List {
+            practitionerSection
             Section {
                 ForEach(viewModel.formFields) { field in
                     row(for: field)
@@ -53,6 +54,37 @@ struct FillFormListView: View {
         }
     }
 
+    /// Shown when the profile choice affects the form (practitioner
+    /// fields or a signature): a picker to choose the profile, or a hint
+    /// when none exist.
+    @ViewBuilder
+    private var practitionerSection: some View {
+        if viewModel.usesProfileSelection {
+            if viewModel.practitionerProfiles.count > 1 {
+                Section {
+                    Picker("Practitioner", selection: profileBinding) {
+                        ForEach(viewModel.practitionerProfiles) { profile in
+                            Text(profile.displayLabel).tag(profile.id as UUID?)
+                        }
+                    }
+                }
+            } else if viewModel.practitionerProfiles.isEmpty {
+                Section {
+                    Text("This form uses practitioner details. Add a profile in Settings → Practitioner Profiles to fill them (and sign) automatically.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private var profileBinding: Binding<UUID?> {
+        Binding(
+            get: { viewModel.selectedProfileID },
+            set: { viewModel.selectProfile(id: $0) }
+        )
+    }
+
     // MARK: - Rows
 
     @ViewBuilder
@@ -82,8 +114,25 @@ struct FillFormListView: View {
             dateRow(for: field)
         case .checkbox:
             Toggle(field.name, isOn: checkboxBinding(for: field))
-        case .staticText:
-            EmptyView()   // never in formFields
+        case .signature:
+            signatureRow(for: field)
+        case .staticText,
+             .doctorName, .officeAddress, .officeFax, .officePhone, .officeEmail, .practitionerID:
+            EmptyView()   // never in formFields (auto-populated)
+        }
+    }
+
+    @ViewBuilder
+    private func signatureRow(for field: FieldDefinition) -> some View {
+        if viewModel.signatureImage != nil {
+            Toggle(field.name, isOn: checkboxBinding(for: field))
+        } else {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(field.name)
+                Text("Add a signature to your practitioner profile in Settings to sign this form.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 

@@ -11,6 +11,9 @@ import SwiftUI
 struct FieldInspectorForm: View {
     let viewModel: TemplateEditorViewModel
 
+    @FocusState private var isNameFieldFocused: Bool
+    @State private var nameSelection: TextSelection?
+
     /// PDF-safe fonts only; the export renderer draws with these same names.
     private static let fontOptions: [(label: String, name: String)] = [
         ("Helvetica", "Helvetica"),
@@ -36,7 +39,12 @@ struct FieldInspectorForm: View {
                 }
             }
             Section {
-                TextField("Name", text: binding(\.name, default: ""))
+                // A just-created field arrives with its placeholder name
+                // focused and fully selected, so typing replaces it.
+                TextField("Name", text: binding(\.name, default: ""), selection: $nameSelection)
+                    .focused($isNameFieldFocused)
+                    .onAppear { highlightNameIfNewField() }
+                    .onChange(of: viewModel.selectedFieldID) { _, _ in highlightNameIfNewField() }
                 Picker("Type", selection: binding(\.type, default: .singleLineText)) {
                     ForEach(availableTypes, id: \.self) { type in
                         Text(type.displayName).tag(type)
@@ -59,6 +67,8 @@ struct FieldInspectorForm: View {
             } footer: {
                 if field.type == .patientName {
                     Text("The patient's name is added to the exported PDF's file name. One patient-name field per form.")
+                } else if field.type.isPractitionerField {
+                    Text("Auto-filled from the selected practitioner profile (Settings → Practitioner Profiles) when filling.")
                 }
             }
             Section("Text Style") {
@@ -107,6 +117,15 @@ struct FieldInspectorForm: View {
                 }
             }
         }
+    }
+
+    private func highlightNameIfNewField() {
+        guard let id = viewModel.selectedFieldID,
+              viewModel.consumeNameFocusRequest(for: id),
+              let name = viewModel.selectedField?.name
+        else { return }
+        isNameFieldFocused = true
+        nameSelection = TextSelection(range: name.startIndex..<name.endIndex)
     }
 
     /// All field types, minus Patient Name when another field already

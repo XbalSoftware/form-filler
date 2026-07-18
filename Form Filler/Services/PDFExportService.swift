@@ -77,6 +77,7 @@ nonisolated struct PDFExportService: Sendable {
         template: Template,
         values: [UUID: FieldValue],
         marks: [AdHocMark] = [],
+        signature: UIImage? = nil,
         sourceURL: URL
     ) throws -> Data {
         guard let document = PDFDocument(url: sourceURL) else {
@@ -126,6 +127,11 @@ nonisolated struct PDFExportService: Sendable {
                     if let text = FieldValueFormatting.displayText(for: field, value: values[field.id]) {
                         drawFieldText(text, field: field, space: space)
                     }
+                    if let signature,
+                       field.type == .signature,
+                       case .checkbox(true) = values[field.id] {
+                        drawSignature(signature, field: field, space: space)
+                    }
                 }
 
                 for mark in marks where mark.pageIndex == pageIndex {
@@ -134,6 +140,22 @@ nonisolated struct PDFExportService: Sendable {
             }
         }
         return ensuringEmbeddedSource(data, payloadString: payloadString)
+    }
+
+    /// Draws the stored signature image aspect-fit and centered in the
+    /// field's rect (display space — UIImage.draw matches its y-down).
+    private func drawSignature(_ image: UIImage, field: FieldDefinition, space: PageCoordinateSpace) {
+        let rect = space.viewRect(fromPDFRect: field.rect, in: space.displaySize)
+        let size = image.size
+        guard size.width > 0, size.height > 0, rect.width > 0, rect.height > 0 else { return }
+        let scale = min(rect.width / size.width, rect.height / size.height)
+        let drawSize = CGSize(width: size.width * scale, height: size.height * scale)
+        image.draw(in: CGRect(
+            x: rect.midX - drawSize.width / 2,
+            y: rect.midY - drawSize.height / 2,
+            width: drawSize.width,
+            height: drawSize.height
+        ))
     }
 
     /// Draws an ad-hoc checkmark or circle as vector strokes in display
@@ -230,7 +252,7 @@ nonisolated struct PDFExportService: Sendable {
         // 1:1 scale — display-space rect in PDF points (orientation-correct
         // even on rotated pages, where PDF-space width/height are swapped).
         let rect = space.viewRect(fromPDFRect: field.rect, in: space.displaySize)
-        let multiline = field.type == .multiLineText
+        let multiline = field.type.isMultiline
 
         let fontSize = TextFitting.fittedFontSize(
             for: text,
@@ -260,9 +282,12 @@ nonisolated struct PDFExportService: Sendable {
         case .checkbox:
             let size = attributed.boundingRect(with: rect.size, options: options, context: nil).size
             attributed.draw(at: CGPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2))
-        case .multiLineText:
+        case .multiLineText, .officeAddress:
             attributed.draw(with: rect, options: options, context: nil)
-        case .singleLineText, .date, .staticText, .patientName:
+        case .singleLineText, .date, .staticText, .patientName, .signature,
+             .doctorName, .officeFax, .officePhone, .officeEmail, .practitionerID:
+            // (.signature never reaches here — displayText is nil — but the
+            // switch must stay exhaustive.)
             let unbounded = CGFloat.greatestFiniteMagnitude
             let textHeight = attributed.boundingRect(
                 with: CGSize(width: unbounded, height: unbounded),

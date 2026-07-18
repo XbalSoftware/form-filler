@@ -34,6 +34,16 @@ Open a template and tap **Edit Template**.
 | Checkbox | Tap to toggle; prints an X |
 | Static Text | Fixed text printed on every copy (e.g. your provider number) |
 | Patient Name | Like single-line text, but its value is also added to the exported file's name. One per form. |
+| Signature | Stamps your stored signature (see below); toggled on per form |
+| Doctor Name, Office Address, Office Fax, Office Phone, Email, Practitioner ID | Auto-filled from your practitioner profile (see below); never typed per form |
+
+## Practitioner profiles
+
+Enter your own details once in **Settings → Practitioner Profiles** — doctor name, office address, fax, phone, email, and practitioner ID. Place the matching field types on your templates and they fill themselves on every form. You can keep several profiles (multiple practitioners, multiple locations); when a template uses practitioner fields and more than one profile exists, a picker at the top of the fill form chooses which one to use. Each profile can have its own name separate from the doctor name — so one doctor practising at two locations keeps, say, "Dr Smith — Downtown" and "Dr Smith — Northside". Profiles are included in library backups.
+
+## Your signature
+
+Each practitioner profile carries its own signature: in **Settings → Practitioner Profiles**, open a profile and draw the signature with a finger or Apple Pencil, or import a PNG/JPEG (a PNG with a transparent background works best). Place **Signature** fields on any template that needs signing; while filling, flip the field's toggle (or tap its box on the preview) to stamp the selected profile's signature, scaled to fit — switching profile switches the signature. Signatures live inside the profiles, so they're included in library backups automatically.
 
 ## Filling a form
 
@@ -58,6 +68,8 @@ The file is named `Template – Patient Name – Date.pdf` (the patient segment 
 
 Every PDF Form Filler exports invisibly carries its own entry data. **Reopen Exported PDF** (library, top left) opens such a file straight back into the fill screen with every value, date, tick, and circle restored — useful for "same referral as last year" or fixing a typo after the fact.
 
+Reopening also saves the restored entries to the on-device draft straight away, so you can hop out — say, to add a missing field in the template editor — and resume without losing anything.
+
 Notes:
 
 - Only PDFs exported by Form Filler can be reopened, and the matching template must still be in your library.
@@ -80,4 +92,4 @@ Notes:
 - Patient data exists only in your current fill session, its encrypted on-device draft, and the PDFs you explicitly export.
 - The draft is AES-encrypted, excluded from iCloud/computer backups, and readable only on the iPad that wrote it.
 
-See the [Privacy Policy](privacy-policy.md) for the full statement.
+See the [Privacy Policy](Form-Filler-privacy-policy.md) for the full statement.

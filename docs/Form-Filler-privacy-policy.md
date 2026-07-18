@@ -22,7 +22,9 @@ Form Filler is an iPad app for templating and filling PDF referral forms. It is 
 
 **Exported PDFs.** A PDF you export contains the completed form, and additionally carries an invisible copy of the entry data so the app can reopen it for editing later. This embedded data contains the **same information that is visibly printed on the form** — no more — so sharing the PDF discloses nothing beyond the document itself. Where you send exported PDFs, and how long you keep them, is entirely up to you.
 
-**Library backups.** A backup file you create from Settings contains your templates and their blank PDFs only — never patient data or drafts.
+**Practitioner profiles.** Your own professional details (name, office address, fax, phone, email, practitioner ID) and each profile's signature image are stored on the device to auto-fill practitioner and signature fields on forms, and are included in library backups. They are your information, not patient data; a signature appears on a form only when you explicitly toggle a signature field.
+
+**Library backups.** A backup file you create from Settings contains your templates, their blank PDFs, your signature image, and your practitioner profiles — never patient data or drafts.
 
 ## What the app never does
 

@@ -9,6 +9,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct FillPageOverlayView: View {
     let viewModel: FillSessionViewModel
@@ -24,6 +25,7 @@ struct FillPageOverlayView: View {
                 FillFieldOverlay(
                     field: field,
                     text: viewModel.displayText(for: field),
+                    signatureImage: viewModel.isSigned(field) ? viewModel.signatureImage : nil,
                     isFocused: viewModel.focusedFieldID == field.id,
                     viewRect: space.viewRect(fromPDFRect: field.rect, in: pageSize),
                     scale: scale
@@ -141,6 +143,8 @@ private struct MarkShape: Shape {
 private struct FillFieldOverlay: View {
     let field: FieldDefinition
     let text: String?
+    /// Non-nil only for a signed signature field.
+    var signatureImage: UIImage? = nil
     let isFocused: Bool
     let viewRect: CGRect
     let scale: CGFloat
@@ -151,19 +155,30 @@ private struct FillFieldOverlay: View {
             if let text {
                 fittedText(text)
             }
+            if let signatureImage {
+                Image(uiImage: signatureImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: viewRect.width, height: viewRect.height)
+            }
         }
         .frame(width: viewRect.width, height: viewRect.height)
         .position(x: viewRect.midX, y: viewRect.midY)
         .contentShape(Rectangle())
-        .accessibilityLabel("\(field.name): \(text ?? "empty")")
+        .accessibilityLabel("\(field.name): \(accessibilityValue)")
         .accessibilityAddTraits(.isButton)
+    }
+
+    private var accessibilityValue: String {
+        if signatureImage != nil { return "signed" }
+        return text ?? "empty"
     }
 
     @ViewBuilder
     private var border: some View {
         if isFocused {
             Rectangle().strokeBorder(Color.accentColor, lineWidth: 1.5)
-        } else if text == nil {
+        } else if text == nil && signatureImage == nil {
             Rectangle().strokeBorder(
                 .secondary.opacity(0.45),
                 style: StrokeStyle(lineWidth: 0.8, dash: [3, 3])
@@ -182,7 +197,7 @@ private struct FillFieldOverlay: View {
             fontName: field.style.fontName,
             preferredSize: field.style.fontSize,
             in: fitBox,
-            multiline: field.type == .multiLineText
+            multiline: field.type.isMultiline
         )
         return Text(text)
             .font(.custom(field.style.fontName, fixedSize: fittedPDFSize * scale))
@@ -192,7 +207,7 @@ private struct FillFieldOverlay: View {
     }
 
     private var alignment: Alignment {
-        let multiline = field.type == .multiLineText
+        let multiline = field.type.isMultiline
         switch field.style.alignment {
         case .leading: return field.type == .checkbox ? .center : (multiline ? .topLeading : .leading)
         case .center: return multiline ? .top : .center

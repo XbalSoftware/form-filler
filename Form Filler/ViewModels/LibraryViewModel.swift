@@ -86,6 +86,9 @@ final class LibraryViewModel {
             viewModel.values = pending.values
             viewModel.marks = pending.marks
             pendingFillRestore = nil
+            // Vault the restored session immediately: even backing straight
+            // out of the fill screen must not lose a reopened form.
+            viewModel.autosaveDraft()
         }
         return viewModel
     }
@@ -142,14 +145,16 @@ final class LibraryViewModel {
         return FillRoute(templateID: payload.templateID)
     }
 
-    /// "Reset App": erases every template, the encrypted fill draft, and
-    /// any staged temp exports. (In DEBUG builds the sample template
-    /// reseeds on next launch.)
+    /// "Reset App": erases every template, the encrypted fill draft, the
+    /// stored signature, and any staged temp exports. (In DEBUG builds
+    /// the sample template reseeds on next launch.)
     func resetApp() {
         do {
             try store.deleteAll()
             thumbnails.removeAll()
             DraftStore().clear()
+            SignatureStore().clear()
+            PractitionerStore().clear()
             PDFExportService.purgeTemporaryExports()
             refresh()
             infoMessage = "All app data has been erased."

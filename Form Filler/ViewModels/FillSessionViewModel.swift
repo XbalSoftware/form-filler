@@ -13,6 +13,7 @@
 import Foundation
 import CoreGraphics
 import Observation
+import UIKit
 
 @MainActor
 @Observable
@@ -40,17 +41,89 @@ final class FillSessionViewModel {
     private var lastAutosavedValues: [UUID: FieldValue]?
     private var lastAutosavedMarks: [AdHocMark]?
 
-    init(template: Template, store: TemplateStore, draftStore: DraftStore = DraftStore()) {
+    /// The signature stamped by signature fields: the selected profile's
+    /// own signature, falling back to the legacy app-wide one
+    /// (SignatureStore) so pre-profile setups keep working. Refreshed on
+    /// profile selection.
+    private(set) var signatureImage: UIImage?
+    /// The pre-profile app-wide signature, if one was ever set up.
+    private let legacySignatureImage: UIImage?
+
+    /// Practitioner profiles available for auto-population, loaded once
+    /// per session.
+    let practitionerProfiles: [PractitionerProfile]
+    private(set) var selectedProfileID: UUID?
+
+    init(
+        template: Template,
+        store: TemplateStore,
+        draftStore: DraftStore = DraftStore(),
+        signatureStore: SignatureStore = SignatureStore(),
+        practitionerStore: PractitionerStore = PractitionerStore()
+    ) {
         self.template = template
         self.pdfURL = store.pdfURL(for: template)
         self.renderService = PDFRenderService(url: pdfURL)
         self.draftStore = draftStore
+        self.legacySignatureImage = signatureStore.loadImage()
+        self.practitionerProfiles = practitionerStore.load()
+        self.selectedProfileID = practitionerProfiles.first?.id
+        self.signatureImage = nil
+        refreshSignature()
+        applySelectedProfile()
     }
 
-    /// True once anything would actually print (including static text and
-    /// ad-hoc marks).
+    // MARK: - Practitioner profiles
+
+    /// True when this template has any auto-populated practitioner field.
+    var hasPractitionerFields: Bool {
+        template.fields.contains { $0.type.isPractitionerField }
+    }
+
+    /// The profile picker matters whenever the profile changes what gets
+    /// printed — practitioner fields OR a profile-backed signature.
+    var usesProfileSelection: Bool {
+        template.fields.contains { $0.type.isPractitionerField || $0.type == .signature }
+    }
+
+    var selectedProfile: PractitionerProfile? {
+        practitionerProfiles.first { $0.id == selectedProfileID }
+    }
+
+    func selectProfile(id: UUID?) {
+        selectedProfileID = id
+        refreshSignature()
+        applySelectedProfile()
+    }
+
+    private func refreshSignature() {
+        signatureImage = selectedProfile?.signatureImage ?? legacySignatureImage
+    }
+
+    /// Materializes the selected profile into the practitioner fields as
+    /// ordinary `.text` values — so preview, export, draft, and the
+    /// embedded payload all see them with zero special-casing. Patient
+    /// entries are untouched.
+    private func applySelectedProfile() {
+        guard let profile = selectedProfile else { return }
+        for field in template.fields where field.type.isPractitionerField {
+            let text = profile.value(for: field.type) ?? ""
+            values[field.id] = text.isEmpty ? nil : .text(text)
+        }
+    }
+
+    /// True once anything would actually print (including static text,
+    /// ad-hoc marks, and applied signatures).
     var hasExportableContent: Bool {
-        !marks.isEmpty || template.fields.contains { displayText(for: $0) != nil }
+        !marks.isEmpty
+            || template.fields.contains { displayText(for: $0) != nil }
+            || (signatureImage != nil && template.fields.contains { isSigned($0) })
+    }
+
+    /// Whether a signature field has been toggled on this session.
+    func isSigned(_ field: FieldDefinition) -> Bool {
+        guard field.type == .signature, case .checkbox(true) = values[field.id] else { return false }
+        return true
     }
 
     /// Value of the template's patient-name field, if entered — it feeds
@@ -75,6 +148,7 @@ final class FillSessionViewModel {
             template: template,
             values: values,
             marks: marks,
+            signature: signatureImage,
             sourceURL: pdfURL
         )
         let directory = PDFExportService.temporaryExportDirectory
@@ -84,10 +158,11 @@ final class FillSessionViewModel {
         return url
     }
 
-    /// Fields the user fills in, in fill order. Static text is rendered
-    /// automatically and never appears in the form.
+    /// Fields the user fills in, in fill order. Static text and
+    /// practitioner fields are rendered automatically and never appear
+    /// in the form.
     var formFields: [FieldDefinition] {
-        template.orderedFields.filter { $0.type != .staticText }
+        template.orderedFields.filter { $0.type != .staticText && !$0.type.isPractitionerField }
     }
 
     /// Fields the keyboard next/previous buttons cycle through.
@@ -105,7 +180,18 @@ final class FillSessionViewModel {
         FieldValueFormatting.displayText(for: field, value: values[field.id])
     }
 
-    var hasAnyValues: Bool { !values.isEmpty || !marks.isEmpty }
+    /// True when the USER has entered anything — auto-populated
+    /// practitioner values don't count, so an untouched form neither
+    /// autosaves a draft nor enables "Clear form".
+    var hasAnyValues: Bool {
+        if !marks.isEmpty { return true }
+        let practitionerIDs = practitionerFieldIDs
+        return values.keys.contains { !practitionerIDs.contains($0) }
+    }
+
+    private var practitionerFieldIDs: Set<UUID> {
+        Set(template.fields.filter { $0.type.isPractitionerField }.map(\.id))
+    }
 
     // MARK: - Focus
 
@@ -133,8 +219,11 @@ final class FillSessionViewModel {
         switch field.type {
         case .checkbox:
             toggleCheckbox(field)
-        case .staticText:
-            break
+        case .staticText,
+             .doctorName, .officeAddress, .officeFax, .officePhone, .officeEmail, .practitionerID:
+            break   // auto-populated; nothing to focus or toggle
+        case .signature:
+            if signatureImage != nil { toggleCheckbox(field) }
         case .singleLineText, .multiLineText, .date, .patientName:
             focusDidChange(to: field.id)
         }
@@ -154,12 +243,14 @@ final class FillSessionViewModel {
 
     /// "Clear form": wipes the in-memory session AND this template's saved
     /// draft — the one deliberate way transient patient data is destroyed.
+    /// Practitioner fields repopulate from the selected profile.
     func clearAll() {
         values.removeAll()
         marks.removeAll()
         lastAutosavedValues = nil
         lastAutosavedMarks = nil
         draftStore.clear(for: template.id)
+        applySelectedProfile()
     }
 
     // MARK: - Ad-hoc marks

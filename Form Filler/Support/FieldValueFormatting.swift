@@ -26,9 +26,14 @@ nonisolated enum FieldValueFormatting {
             let formatter = DateFormatter()
             formatter.dateFormat = field.dateFormat ?? defaultDateFormat
             return formatter.string(from: date)
-        case .singleLineText, .multiLineText, .patientName:
+        case .singleLineText, .multiLineText, .patientName,
+             .doctorName, .officeAddress, .officeFax, .officePhone, .officeEmail, .practitionerID:
+            // Practitioner fields hold ordinary `.text` values, materialized
+            // from the selected profile by FillSessionViewModel.
             guard case .text(let string) = value, !string.isEmpty else { return nil }
             return string
+        case .signature:
+            return nil   // drawn as an image, never as text
         }
     }
 }

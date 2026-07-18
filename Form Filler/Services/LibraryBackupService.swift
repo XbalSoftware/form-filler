@@ -39,11 +39,23 @@ nonisolated struct LibraryBackup: Codable, Sendable {
     var schemaVersion: Int
     var exportedAt: Date
     var entries: [Entry]
+    /// The user's signature image (PNG/JPEG bytes), when one is set up.
+    var signatureBase64: String?
+    /// Practitioner profiles (the user's own details, no PHI).
+    var practitioners: [PractitionerProfile]
 
-    init(schemaVersion: Int = LibraryBackup.currentSchemaVersion, exportedAt: Date = .now, entries: [Entry]) {
+    init(
+        schemaVersion: Int = LibraryBackup.currentSchemaVersion,
+        exportedAt: Date = .now,
+        entries: [Entry],
+        signatureBase64: String? = nil,
+        practitioners: [PractitionerProfile] = []
+    ) {
         self.schemaVersion = schemaVersion
         self.exportedAt = exportedAt
         self.entries = entries
+        self.signatureBase64 = signatureBase64
+        self.practitioners = practitioners
     }
 
     init(from decoder: any Decoder) throws {
@@ -51,11 +63,15 @@ nonisolated struct LibraryBackup: Codable, Sendable {
         schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
         exportedAt = try container.decodeIfPresent(Date.self, forKey: .exportedAt) ?? .now
         entries = try container.decodeIfPresent([Entry].self, forKey: .entries) ?? []
+        signatureBase64 = try container.decodeIfPresent(String.self, forKey: .signatureBase64)
+        practitioners = try container.decodeIfPresent([PractitionerProfile].self, forKey: .practitioners) ?? []
     }
 }
 
 nonisolated struct LibraryBackupService: Sendable {
     let store: TemplateStore
+    var signatureStore = SignatureStore()
+    var practitionerStore = PractitionerStore()
 
     /// `Form Filler Library Backup <yyyy-MM-dd>.json`
     static func defaultFileName(on date: Date = .now) -> String {
@@ -64,8 +80,9 @@ nonisolated struct LibraryBackupService: Sendable {
         return "Form Filler Library Backup \(formatter.string(from: date)).json"
     }
 
-    /// Serializes the whole library. Throws if there's nothing to back up
-    /// (an empty backup is more likely a mistake than an intent).
+    /// Serializes the whole library (plus the stored signature, if any).
+    /// Throws if there's nothing to back up (an empty backup is more
+    /// likely a mistake than an intent).
     func exportBackup() throws -> Data {
         let templates = try store.loadAll()
         guard !templates.isEmpty else { throw LibraryBackupError.emptyBackup }
@@ -75,7 +92,11 @@ nonisolated struct LibraryBackupService: Sendable {
                 pdfBase64: try Data(contentsOf: store.pdfURL(for: template)).base64EncodedString()
             )
         }
-        return try TemplateStore.makeEncoder().encode(LibraryBackup(entries: entries))
+        return try TemplateStore.makeEncoder().encode(LibraryBackup(
+            entries: entries,
+            signatureBase64: signatureStore.loadData()?.base64EncodedString(),
+            practitioners: practitionerStore.load()
+        ))
     }
 
     nonisolated struct RestoreSummary: Equatable, Sendable {
@@ -102,6 +123,25 @@ nonisolated struct LibraryBackupService: Sendable {
                 summary.imported += 1
             } catch TemplateStoreError.templateAlreadyExists {
                 summary.skipped += 1
+            }
+        }
+
+        // Add-only, like templates: the backup's signature is used only
+        // when this device doesn't already have one.
+        if !signatureStore.exists,
+           let base64 = backup.signatureBase64,
+           let data = Data(base64Encoded: base64) {
+            try? signatureStore.save(data)
+        }
+
+        // Practitioner profiles merge add-only by ID too.
+        if !backup.practitioners.isEmpty {
+            var profiles = practitionerStore.load()
+            let existingIDs = Set(profiles.map(\.id))
+            let missing = backup.practitioners.filter { !existingIDs.contains($0.id) }
+            if !missing.isEmpty {
+                profiles.append(contentsOf: missing)
+                try? practitionerStore.save(profiles)
             }
         }
         return summary

@@ -18,6 +18,10 @@ final class TemplateEditorViewModel {
     var selectedFieldID: UUID?
     var currentPageIndex = 0
     var errorMessage: String?
+    /// Set when a field was just created with its default "Field n" name;
+    /// the inspector consumes it to focus + select the name for instant
+    /// renaming.
+    private(set) var fieldAwaitingName: UUID?
 
     let renderService: PDFRenderService?
 
@@ -77,7 +81,16 @@ final class TemplateEditorViewModel {
         )
         template.fields.append(field)
         selectedFieldID = field.id
+        fieldAwaitingName = field.id
         persist()
+    }
+
+    /// One-shot: true (and clears the flag) if `id` was just created and
+    /// its placeholder name should be selected for typing over.
+    func consumeNameFocusRequest(for id: UUID) -> Bool {
+        guard fieldAwaitingName == id else { return false }
+        fieldAwaitingName = nil
+        return true
     }
 
     /// Commits a move or resize. The rect arrives in view space; it's

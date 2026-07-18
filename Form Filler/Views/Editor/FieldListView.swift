@@ -69,6 +69,13 @@ struct FieldListView: View {
         case .checkbox: "checkmark.square"
         case .staticText: "text.quote"
         case .patientName: "person.text.rectangle"
+        case .signature: "signature"
+        case .doctorName: "stethoscope"
+        case .officeAddress: "building.2"
+        case .officeFax: "faxmachine"
+        case .officePhone: "phone"
+        case .officeEmail: "envelope"
+        case .practitionerID: "number"
         }
     }
 }

@@ -66,6 +66,9 @@ struct LibraryView: View {
                 .fileImporter(isPresented: $isPickingExportedPDF, allowedContentTypes: [.pdf]) { result in
                     if case .success(let url) = result,
                        let route = viewModel.prepareFillRestore(from: url) {
+                        // Route through the detail screen so Back lands on
+                        // the fill/edit chooser, same as the normal flow.
+                        navigationPath.append(route.templateID)
                         navigationPath.append(route)
                     }
                 }

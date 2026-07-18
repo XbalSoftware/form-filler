@@ -9,6 +9,7 @@
 //
 
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 struct SettingsView: View {
@@ -30,6 +31,7 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 librarySection
+                practitionerSection
                 aboutSection
                 resetSection
             }
@@ -84,6 +86,16 @@ struct SettingsView: View {
             Text("Library")
         } footer: {
             Text("A backup is a single file holding every template — field layouts and the original PDFs — and can rebuild the library from nothing. Backups never contain patient data.")
+        }
+    }
+
+    private var practitionerSection: some View {
+        Section {
+            NavigationLink("Practitioner Profiles") {
+                PractitionerProfilesView()
+            }
+        } footer: {
+            Text("Your details and signature, auto-filled into practitioner and signature fields on forms.")
         }
     }
 
