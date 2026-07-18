@@ -73,7 +73,12 @@ nonisolated struct PDFExportService: Sendable {
 
     // MARK: - Export
 
-    func exportPDF(template: Template, values: [UUID: FieldValue], sourceURL: URL) throws -> Data {
+    func exportPDF(
+        template: Template,
+        values: [UUID: FieldValue],
+        marks: [AdHocMark] = [],
+        sourceURL: URL
+    ) throws -> Data {
         guard let document = PDFDocument(url: sourceURL) else {
             throw PDFExportError.cannotOpenSource
         }
@@ -89,7 +94,8 @@ nonisolated struct PDFExportService: Sendable {
         let payload = FillSessionPayload(
             templateID: template.id,
             templateName: template.name,
-            values: values
+            values: values,
+            marks: marks
         )
         let payloadString = try payload.embeddedString()
 
@@ -121,9 +127,28 @@ nonisolated struct PDFExportService: Sendable {
                         drawFieldText(text, field: field, space: space)
                     }
                 }
+
+                for mark in marks where mark.pageIndex == pageIndex {
+                    drawMark(mark, space: space, in: rendererContext.cgContext)
+                }
             }
         }
         return ensuringEmbeddedSource(data, payloadString: payloadString)
+    }
+
+    /// Draws an ad-hoc checkmark or circle as vector strokes in display
+    /// space. `MarkGeometry` supplies the same paths the preview overlay
+    /// renders, so the two can never disagree.
+    private func drawMark(_ mark: AdHocMark, space: PageCoordinateSpace, in ctx: CGContext) {
+        let rect = space.viewRect(fromPDFRect: mark.rect, in: space.displaySize)
+        ctx.saveGState()
+        ctx.setStrokeColor(UIColor.black.cgColor)
+        ctx.setLineWidth(MarkGeometry.lineWidth(for: rect))
+        ctx.setLineCap(.round)
+        ctx.setLineJoin(.round)
+        ctx.addPath(MarkGeometry.path(for: mark.kind, in: rect))
+        ctx.strokePath()
+        ctx.restoreGState()
     }
 
     // MARK: - Embedded fill payload

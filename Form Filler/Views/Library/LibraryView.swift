@@ -2,34 +2,32 @@
 //  LibraryView.swift
 //  Form Filler
 //
+//  Top bar layout (user decision 2026-07-17): Reopen Exported PDF on the
+//  far left, search centered, then sort / settings-gear / import-plus on
+//  the right with (+) outermost. Backup & restore live in Settings.
+//
 
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct LibraryView: View {
-    /// Identifiable wrapper for the backup save picker.
-    private struct BackupFile: Identifiable {
-        let id = UUID()
-        let url: URL
-    }
-
     @State private var viewModel = LibraryViewModel()
     @State private var navigationPath = NavigationPath()
     @State private var searchText = ""
     @State private var isPickingFile = false
-    @State private var isPickingBackup = false
     @State private var isPickingExportedPDF = false
-    @State private var backupFile: BackupFile?
+    @State private var isShowingSettings = false
     @State private var pendingImport: PendingImport?
     @State private var templateBeingEdited: Template?
     @State private var templateToDelete: Template?
     @State private var isConfirmingDelete = false
+    @AppStorage("librarySortOrder") private var sortOrder: LibrarySortOrder = .recentlyModified
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
             content
                 .navigationTitle("Form Filler")
-                .searchable(text: $searchText, prompt: "Search templates")
+                .navigationBarTitleDisplayMode(.inline)
                 .toolbar { toolbarContent }
                 .navigationDestination(for: UUID.self) { id in
                     if let template = viewModel.template(withID: id) {
@@ -62,14 +60,8 @@ struct LibraryView: View {
             }
         }
         .background {
-            // fileImporter allows one presentation per view, so the extra
-            // pickers hang off invisible anchors.
-            Color.clear
-                .fileImporter(isPresented: $isPickingBackup, allowedContentTypes: [.json]) { result in
-                    if case .success(let url) = result {
-                        viewModel.restoreBackup(from: url)
-                    }
-                }
+            // fileImporter allows one presentation per view, so the second
+            // picker hangs off an invisible anchor.
             Color.clear
                 .fileImporter(isPresented: $isPickingExportedPDF, allowedContentTypes: [.pdf]) { result in
                     if case .success(let url) = result,
@@ -78,8 +70,8 @@ struct LibraryView: View {
                     }
                 }
         }
-        .sheet(item: $backupFile) { file in
-            DocumentExportPicker(fileURL: file.url) { backupFile = nil }
+        .sheet(isPresented: $isShowingSettings) {
+            SettingsView(viewModel: viewModel)
         }
         .sheet(item: $pendingImport) { pending in
             TemplateFormSheet(
@@ -124,38 +116,73 @@ struct LibraryView: View {
         .onAppear { viewModel.onAppear() }
     }
 
+    // MARK: - Toolbar
+
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Button {
+                isPickingExportedPDF = true
+            } label: {
+                Label("Reopen Exported PDF", systemImage: "doc.text.magnifyingglass")
+                    .labelStyle(.titleAndIcon)
+            }
+        }
+        ToolbarItem(placement: .principal) {
+            searchField
+        }
         ToolbarItemGroup(placement: .topBarTrailing) {
             Menu {
-                Button("Reopen Exported PDF…", systemImage: "doc.text.magnifyingglass") {
-                    isPickingExportedPDF = true
-                }
-                Divider()
-                Button("Back Up Library…", systemImage: "arrow.down.document") {
-                    if let url = viewModel.exportBackupToTemporaryFile() {
-                        backupFile = BackupFile(url: url)
+                Picker("Arrange By", selection: $sortOrder) {
+                    ForEach(LibrarySortOrder.allCases, id: \.self) { order in
+                        Text(order.displayName).tag(order)
                     }
                 }
-                Button("Restore from Backup…", systemImage: "arrow.counterclockwise") {
-                    isPickingBackup = true
-                }
             } label: {
-                Label("Library Options", systemImage: "ellipsis.circle")
+                Label("Arrange", systemImage: "arrow.up.arrow.down")
             }
+            Button("Settings", systemImage: "gearshape") { isShowingSettings = true }
             Button("Import PDF", systemImage: "plus") { isPickingFile = true }
         }
     }
 
-    /// Templates matching the search text (name or category); all of them
-    /// when the search is empty.
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField("Search templates", text: $searchText)
+                .textFieldStyle(.plain)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(.fill.tertiary, in: Capsule())
+        .frame(width: 320)
+    }
+
+    // MARK: - Content
+
+    /// Templates matching the search text (name or category), arranged by
+    /// the chosen sort order.
     private var filteredTemplates: [Template] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return viewModel.templates }
-        return viewModel.templates.filter {
-            $0.name.localizedStandardContains(query)
-                || ($0.category?.localizedStandardContains(query) ?? false)
-        }
+        let matching = query.isEmpty
+            ? viewModel.templates
+            : viewModel.templates.filter {
+                $0.name.localizedStandardContains(query)
+                    || ($0.category?.localizedStandardContains(query) ?? false)
+            }
+        return sortOrder.sorted(matching)
     }
 
     @ViewBuilder

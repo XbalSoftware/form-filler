@@ -25,19 +25,23 @@ nonisolated struct FillSessionPayload: Codable, Equatable, Sendable {
     var templateName: String
     var savedAt: Date
     var values: [UUID: CodableFieldValue]
+    /// Ad-hoc checkmarks/circles placed during the session.
+    var marks: [AdHocMark]
 
     init(
         schemaVersion: Int = FillSessionPayload.currentSchemaVersion,
         templateID: UUID,
         templateName: String,
         savedAt: Date = .now,
-        values: [UUID: FieldValue]
+        values: [UUID: FieldValue],
+        marks: [AdHocMark] = []
     ) {
         self.schemaVersion = schemaVersion
         self.templateID = templateID
         self.templateName = templateName
         self.savedAt = savedAt
         self.values = values.mapValues(CodableFieldValue.init)
+        self.marks = marks
     }
 
     init(from decoder: any Decoder) throws {
@@ -47,6 +51,7 @@ nonisolated struct FillSessionPayload: Codable, Equatable, Sendable {
         templateName = try container.decodeIfPresent(String.self, forKey: .templateName) ?? ""
         savedAt = try container.decodeIfPresent(Date.self, forKey: .savedAt) ?? .now
         values = try container.decodeIfPresent([UUID: CodableFieldValue].self, forKey: .values) ?? [:]
+        marks = try container.decodeIfPresent([AdHocMark].self, forKey: .marks) ?? []
     }
 
     /// The transient in-memory form the app actually works with.

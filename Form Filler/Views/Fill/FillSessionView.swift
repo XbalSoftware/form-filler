@@ -151,6 +151,34 @@ struct FillSessionView: View {
         controller.present(animated: true)
     }
 
+    /// Entry (taps focus fields) vs. the ad-hoc mark tools.
+    private var toolPicker: some View {
+        VStack(spacing: 2) {
+            Picker("Tool", selection: Bindable(viewModel).activeTool) {
+                Label("Type", systemImage: "character.cursor.ibeam")
+                    .tag(FillSessionViewModel.FillTool.entry)
+                Label("Checkmark", systemImage: "checkmark")
+                    .tag(FillSessionViewModel.FillTool.check)
+                Label("Circle", systemImage: "circle")
+                    .tag(FillSessionViewModel.FillTool.circle)
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 380)
+            Text(toolHint)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(height: 14)
+        }
+    }
+
+    private var toolHint: String {
+        switch viewModel.activeTool {
+        case .entry: ""
+        case .check: "Tap the form to place a checkmark · tap a checkmark to remove it"
+        case .circle: "Drag to circle an item · tap a circle to remove it"
+        }
+    }
+
     private var errorBinding: Binding<Bool> {
         Binding(
             get: { viewModel.errorMessage != nil },
@@ -164,6 +192,7 @@ struct FillSessionView: View {
     private var previewColumn: some View {
         if let renderService = viewModel.renderService {
             VStack(spacing: 8) {
+                toolPicker
                 PageCanvasView(
                     renderService: renderService,
                     pageIndex: viewModel.currentPageIndex

@@ -28,9 +28,9 @@ final class LibraryViewModel {
     private let store: TemplateStore
     private let thumbnailService = ThumbnailService()
     private var thumbnailLoadsInFlight: Set<UUID> = []
-    /// Values recovered from an exported PDF, waiting for the fill screen
-    /// they were routed to; consumed by `makeFillSessionViewModel`.
-    private var pendingFillRestore: (templateID: UUID, values: [UUID: FieldValue])?
+    /// Session recovered from an exported PDF, waiting for the fill screen
+    /// it was routed to; consumed by `makeFillSessionViewModel`.
+    private var pendingFillRestore: (templateID: UUID, values: [UUID: FieldValue], marks: [AdHocMark])?
 
     init(store: TemplateStore = TemplateStore()) {
         self.store = store
@@ -84,6 +84,7 @@ final class LibraryViewModel {
         let viewModel = FillSessionViewModel(template: template, store: store)
         if let pending = pendingFillRestore, pending.templateID == template.id {
             viewModel.values = pending.values
+            viewModel.marks = pending.marks
             pendingFillRestore = nil
         }
         return viewModel
@@ -137,8 +138,24 @@ final class LibraryViewModel {
             errorMessage = "This PDF was made with \(name), which is no longer in the library. Restore the template first, then reopen the PDF."
             return nil
         }
-        pendingFillRestore = (payload.templateID, payload.fieldValues)
+        pendingFillRestore = (payload.templateID, payload.fieldValues, payload.marks)
         return FillRoute(templateID: payload.templateID)
+    }
+
+    /// "Reset App": erases every template, the encrypted fill draft, and
+    /// any staged temp exports. (In DEBUG builds the sample template
+    /// reseeds on next launch.)
+    func resetApp() {
+        do {
+            try store.deleteAll()
+            thumbnails.removeAll()
+            DraftStore().clear()
+            PDFExportService.purgeTemporaryExports()
+            refresh()
+            infoMessage = "All app data has been erased."
+        } catch {
+            errorMessage = "Reset failed: \(error.localizedDescription)"
+        }
     }
 
     private func readSecurityScoped(_ url: URL) -> Data? {

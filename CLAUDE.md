@@ -12,7 +12,7 @@ It is **not** a PDF editor or annotation app. Scope discipline matters: resist f
 
 1. **The original PDF is never modified.** After import, `original.pdf` is opened read-only, always. Exports are new documents rendered from scratch. Nothing in the codebase may open a template's PDF for writing.
 2. **Field geometry is stored in PDF page point space** — bottom-left origin, relative to the page's mediaBox, un-rotated. Never store screen/view coordinates. All screen↔PDF conversion goes through the helpers in `Support/CoordinateConversion.swift` and nowhere else.
-3. **Filled patient values are never persisted to disk.** Fill sessions are in-memory only. The only artifact containing patient data is the exported PDF the user explicitly shares. Do not add caching, drafts, autosave, or state restoration of fill values without an explicit user request (and if requested, it must be opt-in per session). Exclude fill-session UI state from iOS state restoration snapshots.
+3. **Filled patient values are never persisted to disk — except via two explicitly user-requested channels** (amended 2026-07-17): (a) the encrypted on-device draft vault (`DraftStore`: AES-GCM via CryptoKit, key in Keychain `ThisDeviceOnly`, file `draft.sealed` excluded from backups) which autosaves the single active fill session until the user clears it; and (b) the `FillSessionPayload` embedded in every exported PDF's Keywords Info key so exports can be reopened for re-editing. `FieldValue` stays deliberately non-Codable; every serialization of fill data must go through `FillSessionPayload`/`CodableFieldValue`. No other caching, persistence, or state restoration of fill values. Exclude fill-session UI state from iOS state restoration snapshots.
 4. **PDFKit is a rendering/parsing engine only, never an interactive view.** Do not use `PDFView` for the editor or fill preview. Pages are rendered to images and displayed in our own SwiftUI zoomable container; overlays are plain SwiftUI views positioned by our own coordinate math.
 5. **Export uses Core Graphics re-rendering** (`UIGraphicsPDFRenderer` / `CGContext`): draw each original page via `PDFPage.draw(with:to:)`, then draw field values as attributed strings in PDF space. No `PDFAnnotation` flattening.
 
@@ -68,8 +68,16 @@ struct FieldDefinition: Codable, Identifiable {
 }
 
 enum FieldType: String, Codable {
-    case singleLineText, multiLineText, date, checkbox, staticText
+    case singleLineText, multiLineText, date, checkbox, staticText, patientName
 }
+// patientName behaves as single-line text whose value also feeds the export
+// filename; the editor enforces at most one per template.
+
+// Ad-hoc fill-session marks (checkmarks stamped on the form's own boxes,
+// circles drawn around items) are `AdHocMark` values: session data like
+// FieldValue, but Codable because they travel in FillSessionPayload.
+// Their stroke paths live in Support/MarkGeometry.swift, shared by the
+// preview overlay and the export renderer.
 
 struct FieldStyle: Codable {
     var fontName: String             // default "Helvetica"
@@ -99,12 +107,14 @@ Templates/
 
 `TemplateStore` enumerates these folders at launch. Writes go via write-to-temp-then-atomic-replace. Duplicating a template = copy folder, new UUID, new folder name, updated json ids/dates.
 
+Alongside (not inside) `Templates/`, Application Support holds `draft.sealed` — the encrypted fill-session draft (see invariant #3). Whole-library backup/restore is `LibraryBackupService`: one JSON file with every template plus its PDF bytes base64-encoded (no patient data).
+
 ## Behavioral details already decided
 
 - Editor: tap creates a field at a default size (~180×24pt single-line); drag to move; corner handles to resize; nudge buttons for fine placement; duplicate-field action; light edge-snapping against other fields.
 - Fill mode: two-pane iPad layout — ordered form list left, live preview right. Keyboard toolbar with next/previous field. Date fields use a date picker with per-field format string. Checkboxes render as "X" sized to the rect.
 - **Auto-shrink:** text overflowing its rect steps the font size down to fit rather than clipping.
-- Export filename default: `<TemplateName> – <yyyy-MM-dd>.pdf`. Never include patient name in the default filename.
+- Export filename default: `<TemplateName> – <PatientName> – <yyyy-MM-dd>.pdf`; the patient segment appears only when the template's patientName field is filled (user decision 2026-07-17, superseding the earlier never-in-filename rule).
 - Export destinations: Share Sheet (covers AirDrop), Save to Files, Print.
 - Multi-page templates supported; editor and preview get a page strip/pager.
 

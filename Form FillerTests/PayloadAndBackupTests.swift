@@ -24,7 +24,11 @@ struct FillSessionPayloadTests {
         let payload = FillSessionPayload(
             templateID: UUID(),
             templateName: "Round Trip",
-            values: values
+            values: values,
+            marks: [
+                AdHocMark(kind: .check, pageIndex: 0, rect: CGRect(x: 50, y: 60, width: 16, height: 16)),
+                AdHocMark(kind: .circle, pageIndex: 1, rect: CGRect(x: 100, y: 200, width: 80, height: 30)),
+            ]
         )
         return (payload, values)
     }
@@ -38,6 +42,7 @@ struct FillSessionPayloadTests {
         #expect(decoded.templateID == payload.templateID)
         #expect(decoded.templateName == "Round Trip")
         #expect(decoded.fieldValues == values)
+        #expect(decoded.marks == payload.marks)
     }
 
     @Test func rejectsForeignStrings() {

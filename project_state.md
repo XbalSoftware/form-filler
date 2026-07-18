@@ -2,22 +2,24 @@
 
 > Living document. Claude Code: read this at the start of every session; update it at the end of every session. `CLAUDE.md` holds the invariants and architecture — this file holds *status*.
 
-**Last updated:** 2026-07-17 (Stage 1 code written; awaiting build, test target, and user verification)
+**Last updated:** 2026-07-17 (post-roadmap polish round 2 written; awaiting user build/test/verification)
 
 ---
 
 ## Current status
 
-**Stage 6 — code complete, unverified.** Stages 1–5 are done (user-confirmed on device 2026-07-17). Stage 6 (the final roadmap stage) is written and awaits user verification:
+**Roadmap complete (Stages 1–6 user-verified on device 2026-07-17), now in post-roadmap polish.**
 
-1. ⌘U — 44 existing + 6 new tests (`PDFExportServiceTests`) must all pass.
-2. Fill a form → **Export** (share sheet): receivers get a URL to a real `.pdf` file named `<Template> – <yyyy-MM-dd>.pdf`. **Critical user requirement: verify the EMR accepts it from the share sheet.**
-3. Verify exported PDF fidelity: AirDrop/save a copy and open in Preview.app, Acrobat, and Files Quick Look — original page content crisp (vector, not rasterized), values exactly where the preview showed them, auto-shrunk text matching.
-4. Share sheet also covers Save to Files and Print — try both.
-5. Back button in fill mode now confirms before discarding entered values; Clear All unchanged; exported temp files are purged on app launch and when leaving the fill screen.
-6. If a rotated (scanned sideways) PDF is available: export it and confirm orientation is correct — rotation handling uses Quartz's documented `getDrawingTransform` but deserves a real-world check.
+**Polish round 1 — done, user-confirmed working 2026-07-17.** Whole-library backup/restore (single JSON file incl. PDFs), library search filter, no forced capitals in fill fields, multi-line Return=newline / Tab=next-field, `patientName` field type feeding the export filename, encrypted draft autosave vault (`DraftStore`), fill payload embedded in exported PDFs + "Reopen Exported PDF", Save/Print/Share as a blue toolbar group, dedicated "Clear form" button, editor field-name labels.
 
-After verification: the roadmap is complete. Remaining niceties live under "Future".
+**Polish round 2 — code written, awaiting user verification (user now runs all builds/tests/commits themselves):**
+
+1. **Checkmark & circle tools in fill mode** — segmented Type/Checkmark/Circle picker above the preview; tap stamps a ✓ (for boxes printed on the form, no template field needed), drag rings an item, tap a mark removes it. Marks render in preview and export via shared `MarkGeometry`, ride in the draft and embedded payload.
+2. **Library top bar** — Reopen Exported PDF far left; centered search field (custom principal item); trailing (left→right): Arrange menu (Recently Modified / Name / Recently Added, persisted via @AppStorage), Settings gear, ＋ outermost. Drag-to-reorder was skipped in favour of sort options — say the word if you want manual ordering too.
+3. **Settings sheet** — Back Up / Restore Library (moved out of the old … menu), About page (version + links), Reset App with confirmation (erases templates, draft, temp exports).
+4. **Docs** — `docs/user-manual.md` and `docs/privacy-policy.md` ready for the GitHub site; `Support/AppLinks.swift` holds placeholder URLs (**TODO: point at the real GitHub Pages site**).
+
+Verification notes for round 2: Print button uses `UIPrintInteractionController.present(animated:)` — check it presents properly on iPad; check the centered search field width feels right; note Reset App in a DEBUG build reseeds the sample template on next launch.
 
 ---
 
@@ -113,13 +115,22 @@ Searchable library · favorites · recently used · auto-fill doctor/clinic prof
 | 20 | Date fields start unset ("Set Date" button) rather than pre-filled with today | Empty overlay until deliberately set; no accidental wrong dates on exports | 2026-07-17 |
 | 21 | Export draws page content via `CGPDFPage.getDrawingTransform` + `drawPDFPage`, not `PDFPage.draw(with:to:)` | Deviates from invariant #5's letter, honors its spirit (vector CG re-render, no flattening); Quartz's transform API has documented /Rotate + mediaBox handling vs. PDFKit's underdocumented draw behavior | 2026-07-17 |
 | 22 | Share by writing the PDF file first, then handing `UIActivityViewController` the **concrete file URL** — never ShareLink + FileRepresentation | ShareLink's FileRepresentation offers a lazy *file promise*, which the user's EMR software rejects (same failure previously seen in their EYEreport app; direct-URL sharing was the proven fix). EMR requires a real URL to a .pdf file | 2026-07-17 |
+| 23 | Invariant #3 amended: fill data may persist ONLY via `FillSessionPayload` — the encrypted draft vault + the payload embedded in exported PDFs | Both explicitly requested by the user (adapted from their EYEreport app); `FieldValue` stays non-Codable so nothing else can casually persist patient data | 2026-07-17 |
+| 24 | Embedded reopen payload lives in the **Keywords** PDF Info key, `FormFiller1:` + base64 JSON, with a one-shot PDFKit re-serialize fallback (`ensuringEmbeddedSource`) | Must be a documented Info key — CGPDFContext silently drops custom keys; device builds were seen dropping documentInfo entirely in EYEreport, hence the read-back check + fallback. A pipeline that rewrites the PDF may strip it; only PDFs exported after this feature carry it | 2026-07-17 |
+| 25 | Draft vault: AES-GCM, key in Keychain `AfterFirstUnlockThisDeviceOnly` (no user-presence gate), `draft.sealed` excluded from backup, complete file protection; leaving the fill screen autosaves silently; resume is offered by prompt; **exporting does NOT clear the draft**; "Clear form" / "Start Fresh" do | Mirrors the proven EYEreport design; restore deliberately silent; back-button discard confirmation removed since nothing is lost on exit (edge-swipe back works again) | 2026-07-17 |
+| 26 | `patientName` field type feeds the export filename `<Template> – <Patient> – <date>.pdf`; editor enforces one per template | User decision, supersedes the never-in-filename rule; value only ever comes from a field the user typed | 2026-07-17 |
+| 27 | Library backup = ONE JSON file, PDFs base64-inline; restore only ever adds (same-ID templates skipped, never overwritten) | Native-frameworks-only rules out zip reading; JSON stays debuggable; add-only restore can't destroy local work | 2026-07-17 |
+| 28 | Multi-line fill fields are `TextEditor` (Return = newline) with `.onKeyPress(.tab)` moving focus; all fill text inputs `.textInputAutocapitalization(.never)` | User: Return must be a carriage return inside multi-line fields, Tab must keep the tab-between-fields flow, and forced capitals break email addresses | 2026-07-17 |
+| 29 | Ad-hoc fill marks (check/circle) are `AdHocMark`s in PDF-space rects, Codable, carried in `FillSessionPayload`; stroke geometry shared preview↔export via `MarkGeometry`; tap places/removes, drag draws circles | User request: tick boxes printed on the form without templating a field for each; circle items. Vector strokes avoid glyph-availability issues (✓ isn't in Helvetica) | 2026-07-17 |
+| 30 | Library arrangement = sort options (Recently Modified default / Name / Recently Added) persisted in @AppStorage, not drag-to-reorder | Answers "arrange templates" without inventing a persisted manual-order field; revisit if the user wants manual ordering | 2026-07-17 |
 
 ## Assumptions awaiting user confirmation
 
 - [x] App name — **Form Filler** (confirmed 2026-07-17)
 - [x] iPad-only target — confirmed via project settings (2026-07-17)
-- [ ] Ephemeral fill sessions acceptable (no draft saving in v1) — proceeding per CLAUDE.md invariant #3; flag if wrong
+- [x] ~~Ephemeral fill sessions~~ — superseded: user requested the encrypted draft vault (Decision #25)
 - [ ] Helvetica as default font — proceeding per Decision #7; flag if wrong
+- [ ] `AppLinks` placeholder URLs — need the real GitHub Pages addresses once docs are hosted
 
 ---
 
@@ -131,6 +142,10 @@ Searchable library · favorites · recently used · auto-fill doctor/clinic prof
 - ~~Fill mode: an accidental back-swipe discards all entered values without confirmation~~ — fixed in Stage 6 (custom back button with discard confirmation; note the edge-swipe-back gesture is disabled on the fill screen as a side effect).
 - Fill preview text uses SwiftUI layout while export uses Core Graphics — same fitted font size via shared TextFitting, but baseline placement could differ by a point or two; user should verify side-by-side.
 - Rotated-page export uses Quartz `getDrawingTransform` (documented) but hasn't been verified against a real sideways-scanned PDF yet.
+- Print uses `UIPrintInteractionController.present(animated:)` — Apple's docs prefer the anchored `present(from:in:)` variants on iPad; verify the print sheet appears correctly on device (round 2, unverified).
+- Reopen-exported-PDF only works for PDFs exported after the embedded-payload feature; pipelines that rewrite PDFs (some EMRs, some mail servers) may strip the Keywords payload.
+- Reset App in DEBUG builds reseeds the sample template on next launch (seeder runs when the library is empty) — cosmetic, DEBUG-only.
+- The mark tools capture one-finger gestures over the whole page while active; two-finger pan/zoom still works, and switching back to Type restores field taps.
 
 ---
 
@@ -147,3 +162,5 @@ Searchable library · favorites · recently used · auto-fill doctor/clinic prof
 - **2026-07-17 (f)** — Stage 4 confirmed (two build fixes en route: `getRed` argument labels; replaced SwiftUI-only `Array.move(fromOffsets:toOffset:)` with a hand-rolled reorder to keep the VM UI-free). Stage 5 written: `FieldDefinition` + `dateFormat`/`staticText` (Decision #18); shared `TextFitting` (fit in PDF points; preview scales the result — export must call the same function) and `FieldValueFormatting`; `FillSessionViewModel` (transient values, focus/page sync, overlay taps, keyboard-adjacency); `Views/Fill/` = FillSessionView (360pt form + preview, Clear All confirmation, disabled Export placeholder for Stage 6), FillFormListView (@FocusState ↔ VM two-way sync with equality guards, keyboard ▲/▼/Done, "Set Date"/clear pattern), FillPageOverlayView (fitted text, dashed empty outlines, focus highlight); inspector gained date-format picker + static-text box; detail Fill button live (disabled when no fields). 11 new tests. Decisions #18–20, two new Known issues (back-swipe discard; preview-vs-export baseline). Next: user verifies → Stage 6 (export + polish).
 - **2026-07-17 (g)** — Stage 5 confirmed (one build fix: ambiguous `.greatestFiniteMagnitude` needed explicit `CGFloat`). Stage 6 written — user requirement surfaced: **EMR software only accepts share-sheet items that are URLs to PDF files** → `ExportedFormPDF` Transferable with `FileRepresentation(exportedContentType: .pdf)` returning `SentTransferredFile` (Decision #22). `PDFExportService`: CGPDFPage vector re-render (Decision #21), values drawn in display space (shared PageCoordinateSpace/TextFitting/FieldValueFormatting), per-field pages, filename `<Name> – <yyyy-MM-dd>.pdf` sanitized. Found+fixed rotated-page fit bug in FillFieldOverlay (was fitting against PDF-space rect; now display-space, matching export). Temp exports in `tmp/Exports/` purged at launch + fill-screen exit. Polish: fill back-button discard confirmation, editor selection haptic, overlay accessibility labels. 6 new tests (50 total). Next: user verifies (incl. EMR acceptance + fidelity in Preview/Acrobat/Quick Look + rotated scan) → roadmap complete; future work only from the "Future" list.
 - **2026-07-17 (h)** — Stage 6 verified except EMR share: the EMR rejected ShareLink's lazy FileRepresentation (file promise), exactly matching the user's prior EYEreport experience. Reworked (Decision #22 amended): deleted `ExportedFormPDF.swift`; `FillSessionViewModel.exportToTemporaryFile()` writes the PDF eagerly on Export tap; new `Views/Shared/ActivityShareSheet.swift` (UIActivityViewController representable) presented in a popover off the Export button with the concrete file URL; export-error alert added to the fill screen. Purge behavior unchanged (launch + fill-screen exit; not on share completion, so open-in-place receivers finish copying safely). Awaiting: EMR acceptance re-test.
+- **2026-07-17 (i)** — Polish round 1 (ten user-listed issues). New: `Support/FillSessionPayload.swift` (+`CodableFieldValue`, the ONLY sanctioned fill-value serialization), `Services/DraftStore.swift` (encrypted vault, EYEreport-adapted), `Services/LibraryBackupService.swift` (single-file JSON backup, add-only restore), `Views/Shared/DocumentExportPicker.swift`; `FieldType.patientName` (+ filename feed, editor one-per-form rule); embedded reopen payload in `PDFExportService` (Keywords key + `ensuringEmbeddedSource` PDFKit fallback + `embeddedPayload(in:)` reader); fill screen reworked (blue Print/Save/Share group, own "Clear form" button, no discard dialog — leaving autosaves, resume prompt on return); fill entry: no autocap, multi-line `TextEditor` with Return=newline / Tab=next via `.onKeyPress`; library `.searchable` filter + … menu (backup/restore/reopen); `PayloadAndBackupTests.swift`. Decisions #23–#28. User confirmed everything works; user now owns build/test/commit.
+- **2026-07-17 (j)** — Polish round 2. New: `Models/AdHocMark.swift` + `Support/MarkGeometry.swift` + fill-mode Type/Checkmark/Circle tool picker (tap to stamp/remove ✓, drag to circle; marks in preview, export, draft, embedded payload — Decision #29); library top bar rearranged (Reopen far left, centered custom search field replacing `.searchable`, Arrange sort menu + gear + ＋ trailing, … menu removed; `LibrarySortOrder` via @AppStorage — Decision #30); `Views/Settings/SettingsView.swift` + `AboutView.swift` (backup/restore moved here, About with `AppLinks` placeholder URLs, Reset App → `TemplateStore.deleteAll` + draft clear + temp purge); `docs/user-manual.md` + `docs/privacy-policy.md` for the GitHub site. Payload round-trip test extended with marks. NOT yet built/tested — user verifies (esp. iPad print-sheet presentation and search-field placement).

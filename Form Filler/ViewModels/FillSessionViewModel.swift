@@ -11,6 +11,7 @@
 //
 
 import Foundation
+import CoreGraphics
 import Observation
 
 @MainActor
@@ -20,14 +21,24 @@ final class FillSessionViewModel {
     let renderService: PDFRenderService?
     let pdfURL: URL
 
+    /// What a tap on the preview does: enter values, stamp a checkmark,
+    /// or draw a circle.
+    enum FillTool: Hashable {
+        case entry, check, circle
+    }
+
     var values: [UUID: FieldValue] = [:]
+    /// Ad-hoc checkmarks/circles — session data like `values`.
+    var marks: [AdHocMark] = []
+    var activeTool: FillTool = .entry
     var focusedFieldID: UUID?
     var currentPageIndex = 0
     var errorMessage: String?
 
     private let draftStore: DraftStore
-    /// Values as of the last draft write — makes unchanged autosave ticks free.
+    /// Session state as of the last draft write — makes unchanged autosave ticks free.
     private var lastAutosavedValues: [UUID: FieldValue]?
+    private var lastAutosavedMarks: [AdHocMark]?
 
     init(template: Template, store: TemplateStore, draftStore: DraftStore = DraftStore()) {
         self.template = template
@@ -36,9 +47,10 @@ final class FillSessionViewModel {
         self.draftStore = draftStore
     }
 
-    /// True once anything would actually print (including static text).
+    /// True once anything would actually print (including static text and
+    /// ad-hoc marks).
     var hasExportableContent: Bool {
-        template.fields.contains { displayText(for: $0) != nil }
+        !marks.isEmpty || template.fields.contains { displayText(for: $0) != nil }
     }
 
     /// Value of the template's patient-name field, if entered — it feeds
@@ -62,6 +74,7 @@ final class FillSessionViewModel {
         let data = try PDFExportService().exportPDF(
             template: template,
             values: values,
+            marks: marks,
             sourceURL: pdfURL
         )
         let directory = PDFExportService.temporaryExportDirectory
@@ -92,7 +105,7 @@ final class FillSessionViewModel {
         FieldValueFormatting.displayText(for: field, value: values[field.id])
     }
 
-    var hasAnyValues: Bool { !values.isEmpty }
+    var hasAnyValues: Bool { !values.isEmpty || !marks.isEmpty }
 
     // MARK: - Focus
 
@@ -139,12 +152,54 @@ final class FillSessionViewModel {
         values[id] = nil
     }
 
-    /// "Clear form": wipes the in-memory values AND this template's saved
+    /// "Clear form": wipes the in-memory session AND this template's saved
     /// draft — the one deliberate way transient patient data is destroyed.
     func clearAll() {
         values.removeAll()
+        marks.removeAll()
         lastAutosavedValues = nil
+        lastAutosavedMarks = nil
         draftStore.clear(for: template.id)
+    }
+
+    // MARK: - Ad-hoc marks
+
+    func marks(onPage index: Int) -> [AdHocMark] {
+        marks.filter { $0.pageIndex == index }
+    }
+
+    /// Handles a tap on the preview while a mark tool is active: removes
+    /// the mark under the finger if there is one, otherwise places a new
+    /// default-size mark centered on the tap. `pdfPoint` is in PDF space.
+    func handleMarkTap(at pdfPoint: CGPoint, kind: AdHocMark.Kind) {
+        if let hit = mark(at: pdfPoint) {
+            marks.removeAll { $0.id == hit.id }
+            return
+        }
+        let size = kind == .check ? AdHocMark.defaultCheckSize : AdHocMark.defaultCircleSize
+        addMark(kind: kind, rect: CGRect(
+            x: pdfPoint.x - size.width / 2,
+            y: pdfPoint.y - size.height / 2,
+            width: size.width,
+            height: size.height
+        ))
+    }
+
+    /// Commits a dragged-out circle. `pdfRect` is in PDF space.
+    func addCircle(around pdfRect: CGRect) {
+        addMark(kind: .circle, rect: pdfRect)
+    }
+
+    private func addMark(kind: AdHocMark.Kind, rect: CGRect) {
+        marks.append(AdHocMark(kind: kind, pageIndex: currentPageIndex, rect: rect))
+    }
+
+    /// The topmost mark on the current page containing the point (with a
+    /// little slop so small checkmarks are removable).
+    private func mark(at pdfPoint: CGPoint) -> AdHocMark? {
+        marks(onPage: currentPageIndex).last {
+            $0.rect.insetBy(dx: -4, dy: -4).contains(pdfPoint)
+        }
     }
 
     // MARK: - Draft vault
@@ -153,14 +208,16 @@ final class FillSessionViewModel {
     func availableDraft() -> FillSessionPayload? {
         guard let payload = draftStore.load(),
               payload.templateID == template.id,
-              !payload.values.isEmpty
+              !(payload.values.isEmpty && payload.marks.isEmpty)
         else { return nil }
         return payload
     }
 
     func restoreDraft(_ payload: FillSessionPayload) {
         values = payload.fieldValues
+        marks = payload.marks
         lastAutosavedValues = values
+        lastAutosavedMarks = marks
     }
 
     /// Deletes the saved draft without touching the in-memory session
@@ -168,23 +225,28 @@ final class FillSessionViewModel {
     func discardDraft() {
         draftStore.clear(for: template.id)
         lastAutosavedValues = nil
+        lastAutosavedMarks = nil
     }
 
-    /// Writes the current values to the encrypted vault. Cheap when
+    /// Writes the current session to the encrypted vault. Cheap when
     /// nothing changed; never writes an empty session (so opening a form
     /// and backing straight out can't clobber another form's draft).
     /// Autosave failures are non-fatal and deliberately silent — the
     /// in-memory session is unaffected.
     func autosaveDraft() {
-        guard hasAnyValues, values != lastAutosavedValues else { return }
+        guard hasAnyValues,
+              values != lastAutosavedValues || marks != lastAutosavedMarks
+        else { return }
         let payload = FillSessionPayload(
             templateID: template.id,
             templateName: template.name,
-            values: values
+            values: values,
+            marks: marks
         )
         do {
             try draftStore.save(payload)
             lastAutosavedValues = values
+            lastAutosavedMarks = marks
         } catch {
             // Intentionally silent; the next tick retries.
         }

@@ -15,6 +15,9 @@ struct FillPageOverlayView: View {
     let space: PageCoordinateSpace
     let pageSize: CGSize
 
+    /// Live outline while dragging out a circle, in page view space.
+    @State private var draggedCircleRect: CGRect?
+
     var body: some View {
         ZStack {
             ForEach(viewModel.fields(onPage: viewModel.currentPageIndex)) { field in
@@ -27,11 +30,111 @@ struct FillPageOverlayView: View {
                 )
                 .onTapGesture { viewModel.handleOverlayTap(field) }
             }
+            ForEach(viewModel.marks(onPage: viewModel.currentPageIndex)) { mark in
+                MarkOverlay(mark: mark, viewRect: space.viewRect(fromPDFRect: mark.rect, in: pageSize))
+            }
+            if viewModel.activeTool != .entry {
+                markToolLayer
+            }
         }
     }
 
     private var scale: CGFloat {
         space.displaySize.width > 0 ? pageSize.width / space.displaySize.width : 1
+    }
+
+    // MARK: - Mark tools
+
+    /// Full-page catcher while a mark tool is active: tap places (or
+    /// removes) a mark; with the circle tool a drag draws the circle.
+    private var markToolLayer: some View {
+        Color.clear
+            .contentShape(Rectangle())
+            .frame(width: pageSize.width, height: pageSize.height)
+            .gesture(markGesture)
+            .overlay {
+                if let rect = draggedCircleRect {
+                    MarkShape(kind: .circle)
+                        .stroke(
+                            Color.black.opacity(0.6),
+                            style: StrokeStyle(lineWidth: MarkGeometry.lineWidth(for: rect))
+                        )
+                        .frame(width: rect.width, height: rect.height)
+                        .position(x: rect.midX, y: rect.midY)
+                }
+            }
+    }
+
+    private var markGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                guard viewModel.activeTool == .circle else { return }
+                let rect = normalizedRect(value.startLocation, value.location)
+                draggedCircleRect = max(rect.width, rect.height) > 6 ? rect : nil
+            }
+            .onEnded { value in
+                defer { draggedCircleRect = nil }
+                let rect = normalizedRect(value.startLocation, value.location)
+                let isTap = max(rect.width, rect.height) <= 6
+                switch viewModel.activeTool {
+                case .check:
+                    viewModel.handleMarkTap(
+                        at: space.pdfPoint(fromViewPoint: value.startLocation, in: pageSize),
+                        kind: .check
+                    )
+                case .circle where isTap:
+                    viewModel.handleMarkTap(
+                        at: space.pdfPoint(fromViewPoint: value.startLocation, in: pageSize),
+                        kind: .circle
+                    )
+                case .circle:
+                    viewModel.addCircle(around: space.pdfRect(fromViewRect: rect, in: pageSize))
+                case .entry:
+                    break
+                }
+            }
+    }
+
+    private func normalizedRect(_ a: CGPoint, _ b: CGPoint) -> CGRect {
+        CGRect(
+            x: min(a.x, b.x),
+            y: min(a.y, b.y),
+            width: abs(b.x - a.x),
+            height: abs(b.y - a.y)
+        )
+    }
+}
+
+/// One rendered ad-hoc mark. Never intercepts touches — removal goes
+/// through the tool layer's hit test so field taps keep working in
+/// entry mode.
+private struct MarkOverlay: View {
+    let mark: AdHocMark
+    let viewRect: CGRect
+
+    var body: some View {
+        MarkShape(kind: mark.kind)
+            .stroke(
+                Color.black,
+                style: StrokeStyle(
+                    lineWidth: MarkGeometry.lineWidth(for: viewRect),
+                    lineCap: .round,
+                    lineJoin: .round
+                )
+            )
+            .frame(width: viewRect.width, height: viewRect.height)
+            .position(x: viewRect.midX, y: viewRect.midY)
+            .allowsHitTesting(false)
+            .accessibilityLabel(mark.kind == .check ? "Checkmark" : "Circle mark")
+    }
+}
+
+/// SwiftUI face of `MarkGeometry` — identical strokes to the export.
+private struct MarkShape: Shape {
+    let kind: AdHocMark.Kind
+
+    func path(in rect: CGRect) -> Path {
+        Path(MarkGeometry.path(for: kind, in: rect))
     }
 }
 

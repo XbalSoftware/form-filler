@@ -197,6 +197,15 @@ nonisolated struct TemplateStore: Sendable {
         try FileManager.default.removeItem(at: folder)
     }
 
+    /// Removes the whole Templates directory — every template, including
+    /// folders too damaged to load. Reset App only.
+    func deleteAll() throws {
+        guard FileManager.default.fileExists(atPath: baseDirectoryURL.path(percentEncoded: false)) else {
+            return
+        }
+        try FileManager.default.removeItem(at: baseDirectoryURL)
+    }
+
     // MARK: - Plumbing
 
     private func ensureBaseDirectory() throws {
