@@ -90,6 +90,7 @@ struct FieldInspectorForm: View {
                 }
                 .pickerStyle(.segmented)
                 ColorPicker("Color", selection: colorBinding, supportsOpacity: false)
+                Toggle("White Background", isOn: whiteBackgroundBinding)
             }
             Section("Position") {
                 LabeledContent("Frame") {
@@ -179,6 +180,15 @@ struct FieldInspectorForm: View {
             set: { newValue in
                 viewModel.updateSelectedField { $0.staticText = newValue.isEmpty ? nil : newValue }
             }
+        )
+    }
+
+    /// Resolved default (on for multi-line) until the user chooses
+    /// explicitly; the explicit choice then sticks across type changes.
+    private var whiteBackgroundBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.selectedField?.fillsWhiteBackground ?? false },
+            set: { newValue in viewModel.updateSelectedField { $0.whiteBackground = newValue } }
         )
     }
 

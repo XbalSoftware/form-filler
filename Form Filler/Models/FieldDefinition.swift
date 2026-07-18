@@ -26,6 +26,10 @@ nonisolated struct FieldDefinition: Codable, Identifiable, Equatable, Sendable {
     var dateFormat: String?
     /// Static-text fields only: the fixed text stamped on every fill.
     var staticText: String?
+    /// Whether the field's rect is filled white behind its content (hides
+    /// ruled lines under multi-line answers). nil = per-type default:
+    /// on for multi-line text, off otherwise.
+    var whiteBackground: Bool?
 
     init(
         id: UUID = UUID(),
@@ -36,7 +40,8 @@ nonisolated struct FieldDefinition: Codable, Identifiable, Equatable, Sendable {
         style: FieldStyle = .default,
         sortOrder: Int = 0,
         dateFormat: String? = nil,
-        staticText: String? = nil
+        staticText: String? = nil,
+        whiteBackground: Bool? = nil
     ) {
         self.id = id
         self.name = name
@@ -47,6 +52,7 @@ nonisolated struct FieldDefinition: Codable, Identifiable, Equatable, Sendable {
         self.sortOrder = sortOrder
         self.dateFormat = dateFormat
         self.staticText = staticText
+        self.whiteBackground = whiteBackground
     }
 
     init(from decoder: any Decoder) throws {
@@ -61,5 +67,12 @@ nonisolated struct FieldDefinition: Codable, Identifiable, Equatable, Sendable {
         sortOrder = try container.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
         dateFormat = try container.decodeIfPresent(String.self, forKey: .dateFormat)
         staticText = try container.decodeIfPresent(String.self, forKey: .staticText)
+        whiteBackground = try container.decodeIfPresent(Bool.self, forKey: .whiteBackground)
+    }
+
+    /// Resolved white-background behavior: explicit choice, else on for
+    /// multi-line text. (Only drawn when the field has content.)
+    var fillsWhiteBackground: Bool {
+        whiteBackground ?? (type == .multiLineText)
     }
 }

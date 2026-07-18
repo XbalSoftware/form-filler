@@ -29,7 +29,7 @@ Open a template and tap **Edit Template**.
 | Type | Behaviour |
 |---|---|
 | Single-line Text | One line, auto-shrinks to fit the box |
-| Multi-line Text | Wraps and supports carriage returns |
+| Multi-line Text | Wraps and supports carriage returns; fills its box white behind your answer (hides ruled lines — toggleable per field) |
 | Date | Filled with a date picker; per-field date format |
 | Checkbox | Tap to toggle; prints an X |
 | Static Text | Fixed text printed on every copy (e.g. your provider number) |

@@ -254,6 +254,14 @@ nonisolated struct PDFExportService: Sendable {
         let rect = space.viewRect(fromPDFRect: field.rect, in: space.displaySize)
         let multiline = field.type.isMultiline
 
+        // White backing (default for multi-line): hides the form's ruled
+        // lines behind the answer. Only ever drawn when there IS an
+        // answer — this function isn't called for empty fields.
+        if field.fillsWhiteBackground, let ctx = UIGraphicsGetCurrentContext() {
+            ctx.setFillColor(UIColor.white.cgColor)
+            ctx.fill(rect)
+        }
+
         let fontSize = TextFitting.fittedFontSize(
             for: text,
             fontName: field.style.fontName,

@@ -151,6 +151,10 @@ private struct FillFieldOverlay: View {
 
     var body: some View {
         ZStack {
+            // Matches the export's white backing behind filled content.
+            if field.fillsWhiteBackground && (text != nil || signatureImage != nil) {
+                Color.white
+            }
             border
             if let text {
                 fittedText(text)
