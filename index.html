@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Form Filler — PDF Referral Templater for iPad</title>
+<meta name="description" content="Form Filler is an iPad app for templating PDF referral forms: import a form once, place its fields, then fill and export completed copies. Everything stays on your iPad.">
+<style>
+  :root {
+    --ink: #1c1c1e;
+    --muted: #6e6e73;
+    --accent: #0a66c2;
+    --rule: #e3e3e8;
+    --bg-soft: #f5f5f7;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink: #f2f2f7; --muted: #98989f; --accent: #6cb2ff; --rule: #3a3a3f; --bg-soft: #1c1c20; }
+    body { background: #121214; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+  }
+  header.site {
+    border-bottom: 1px solid var(--rule);
+    padding: 2.5rem 1.25rem 1.75rem;
+    text-align: center;
+  }
+  header.site h1 { margin: 0 0 .3rem; font-size: 2rem; letter-spacing: -.02em; }
+  header.site p { margin: 0 auto; max-width: 38rem; color: var(--muted); }
+  nav.toc {
+    display: flex; flex-wrap: wrap; gap: .4rem .9rem; justify-content: center;
+    padding: .9rem 1rem; border-bottom: 1px solid var(--rule);
+    position: sticky; top: 0; backdrop-filter: blur(10px);
+    background: color-mix(in srgb, var(--bg-soft) 82%, transparent);
+    font-size: .95rem;
+  }
+  nav.toc a { color: var(--accent); text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+  main { max-width: 46rem; margin: 0 auto; padding: 1rem 1.25rem 4rem; }
+  section { scroll-margin-top: 4.5rem; }
+  h2 {
+    font-size: 1.5rem; letter-spacing: -.01em;
+    margin: 3rem 0 .75rem; padding-top: 1.5rem; border-top: 1px solid var(--rule);
+  }
+  h3 { font-size: 1.1rem; margin: 1.6rem 0 .4rem; }
+  p, li { color: var(--ink); }
+  li { margin: .25rem 0; }
+  strong { font-weight: 600; }
+  em.updated { color: var(--muted); font-style: normal; font-size: .9rem; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .95rem; }
+  th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-weight: 600; }
+  .card {
+    background: var(--bg-soft); border: 1px solid var(--rule); border-radius: 12px;
+    padding: 1rem 1.25rem; margin: 1rem 0;
+  }
+  .steps li { margin: .55rem 0; }
+  footer.site {
+    border-top: 1px solid var(--rule); margin-top: 3rem;
+    padding: 1.5rem 1.25rem 3rem; text-align: center; color: var(--muted); font-size: .9rem;
+  }
+  a { color: var(--accent); }
+  code { background: var(--bg-soft); border-radius: 4px; padding: .1em .35em; font-size: .9em; }
+</style>
+</head>
+<body>
+
+<header class="site">
+  <h1>Form Filler</h1>
+  <p>An iPad app for templating PDF referral forms: import a form once, place its fields, then fill and export completed copies — everything stays on your iPad.</p>
+</header>
+
+<nav class="toc">
+  <a href="#quick-start">Quick Start</a>
+  <a href="#user-manual">User Manual</a>
+  <a href="#privacy-policy">Privacy Policy</a>
+  <a href="#contact">Contact</a>
+</nav>
+
+<main>
+
+<!-- ============================ QUICK START ============================ -->
+<section id="quick-start">
+  <h2>Quick Start</h2>
+  <div class="card">
+    <ol class="steps">
+      <li><strong>Import a form.</strong> Tap <strong>＋</strong> in the library, pick the blank referral PDF, give it a name.</li>
+      <li><strong>Place the fields.</strong> Open the template → <strong>Edit Template</strong>. Tap the page where an answer belongs, stretch the box to fit, and Tab through the field names. Set the type — text, date, checkbox, patient name, signature, or your practitioner details.</li>
+      <li><strong>Add yourself once.</strong> In <strong>Settings → Practitioner Profiles</strong>, enter your details and sign. Practitioner and signature fields fill themselves on every form afterwards.</li>
+      <li><strong>Fill it.</strong> Open the template → <strong>Fill Form</strong>. Tab between fields, tick boxes, circle items, add a comment if needed — the live preview shows exactly what will print.</li>
+      <li><strong>Send it.</strong> The blue <strong>Share</strong>, <strong>Save</strong>, and <strong>Print</strong> buttons produce the finished PDF, named <code>Patient – Template – Date.pdf</code>. Done — fill the same form in seconds next time.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============================ USER MANUAL ============================ -->
+<section id="user-manual">
+  <h2>User Manual</h2>
+
+  <h3>The Library</h3>
+  <p>The library is the home screen — a grid of your templates.</p>
+  <ul>
+    <li><strong>Import a form</strong>: tap <strong>＋</strong> (top right), pick a PDF, give it a name and optional category.</li>
+    <li><strong>Search</strong>: the search field in the centre of the top bar matches template names and categories.</li>
+    <li><strong>Arrange</strong>: the ↑↓ button chooses the order — Recently Modified, Name, or Recently Added.</li>
+    <li><strong>Template actions</strong>: long-press a card for Edit Details, Duplicate, or Delete.</li>
+    <li><strong>Reopen Exported PDF</strong> (top left): open a PDF previously exported by Form Filler to continue or correct it.</li>
+    <li><strong>Settings</strong> (gear): profiles, backup, About, and Reset App.</li>
+  </ul>
+
+  <h3>Setting up a template (the editor)</h3>
+  <ul>
+    <li><strong>Tap</strong> an empty spot on the page to add a field. <strong>Drag</strong> to move it; drag the corner handles to resize — the three blue handles adjust <strong>width only</strong> (fields usually share one height), and the <strong>red bottom-left handle</strong> adjusts width and height.</li>
+    <li>Each box shows its field name in grey, rendered at the exact size, font, and alignment your entries will print at, so you can perfect alignment without leaving the editor.</li>
+    <li>Naming flows fast: a new field's name arrives selected (just type), and <strong>Tab / Shift-Tab in the name box hops to the next / previous field</strong> with its name selected too.</li>
+    <li><strong>Two fingers</strong> pan and zoom the page. Nudge arrows move the selected field one point at a time.</li>
+    <li>The inspector lists fields in fill order — tap one to edit its name, type, font, size, alignment, colour, and date format; use Reorder to change fill order.</li>
+  </ul>
+
+  <h3>Field types</h3>
+  <table>
+    <tr><th>Type</th><th>Behaviour</th></tr>
+    <tr><td>Single-line Text</td><td>One line, auto-shrinks to fit the box</td></tr>
+    <tr><td>Multi-line Text</td><td>Wraps and supports carriage returns; fills its box white behind your answer (hides ruled lines — toggleable per field)</td></tr>
+    <tr><td>Date</td><td>Filled with a date picker; per-field date format</td></tr>
+    <tr><td>Checkbox</td><td>Tap to toggle; prints an X</td></tr>
+    <tr><td>Static Text</td><td>Fixed text printed on every copy (e.g. your provider number)</td></tr>
+    <tr><td>Patient Name</td><td>Like single-line text, but its value is also added to the exported file's name. One per form.</td></tr>
+    <tr><td>Signature</td><td>Auto-stamps the selected profile's signature, like the other practitioner fields</td></tr>
+    <tr><td>Doctor Name, Office Address, Office Fax, Office Phone, Email, Practitioner ID</td><td>Auto-filled from your practitioner profile; never typed per form</td></tr>
+  </table>
+
+  <h3>Practitioner profiles</h3>
+  <p>Enter your own details once in <strong>Settings → Practitioner Profiles</strong> — doctor name, office address, fax, phone, email, and practitioner ID. Place the matching field types on your templates and they fill themselves on every form. You can keep several profiles (multiple practitioners, multiple locations); when a template uses practitioner fields and more than one profile exists, a picker at the top of the fill form chooses which one to use. Each profile can have its own name separate from the doctor name — so one doctor practising at two locations keeps, say, "Dr Smith — Downtown" and "Dr Smith — Northside". Profiles are included in library backups.</p>
+
+  <h3>Your signature</h3>
+  <p>Each practitioner profile carries its own signature: open a profile and draw the signature with a finger or Apple Pencil, or import a PNG/JPEG (a PNG with a transparent background works best). Place <strong>Signature</strong> fields on any template that needs signing and they stamp themselves automatically from the selected profile — no per-form step, and switching profile switches the signature. Signatures live inside the profiles, so they're included in library backups automatically.</p>
+
+  <h3>Filling a form</h3>
+  <ul>
+    <li><strong>Keyboard flow</strong>: Tab (or the ▲/▼ toolbar buttons) moves between fields. In multi-line fields, Return starts a new line and Tab still moves on. Nothing is auto-capitalised.</li>
+    <li><strong>Tap the preview</strong> to jump to a field, toggle a checkbox, or focus a text box.</li>
+    <li><strong>Checkmark, circle, and comment tools</strong>: switch from <strong>Type</strong> to <strong>Checkmark</strong> (tap the form to stamp a tick — no template field needed), <strong>Circle</strong> (drag to ring an item), or <strong>Comment</strong> (tap or drag out a box, then type a one-off note). Comments support multiple lines with their own text size, bold, black border, and white background; with the Comment tool active, tap a comment to edit it, drag to move it, and use its corner dot to resize.</li>
+    <li><strong>Drafts</strong>: entries autosave every few seconds to an encrypted draft that never leaves the iPad. Leave the screen — even to adjust the template — and you'll be offered <strong>Resume</strong> when you return. <strong>Clear form</strong> erases the entries and the draft.</li>
+  </ul>
+
+  <h3>Exporting</h3>
+  <p>The blue buttons at the top right: <strong>Share</strong> (AirDrop, EMR, email…), <strong>Save</strong> (to the Files app), and <strong>Print</strong>. The file is named <code>Patient Name – Template – Date.pdf</code> (the patient segment appears when the form has a Patient Name field).</p>
+
+  <h3>Reopening an exported PDF</h3>
+  <p>Every PDF Form Filler exports invisibly carries its own entry data. <strong>Reopen Exported PDF</strong> (library, top left) opens such a file straight back into the fill screen with every value, date, tick, circle, and comment restored — useful for "same referral as last year" or fixing a typo after the fact. Reopening also saves the restored entries to the on-device draft immediately, so you can hop out and resume without losing anything.</p>
+  <p>Notes: only PDFs exported by Form Filler can be reopened, and the matching template must still be in your library; another app that rewrites the PDF may strip the hidden data; the data inside is the same information visible on the page — sharing the PDF shares no more than what's printed on it.</p>
+
+  <h3>Sharing a template with a colleague</h3>
+  <ul>
+    <li><strong>Share Template…</strong> (from a template's screen) produces a normal, viewable PDF of the blank form that invisibly carries the template's field layout. A colleague running Form Filler just uses <strong>＋ Import PDF</strong> on it: the app recognises it and offers <em>Import Template</em>, recreating the template ready to fill. Shared templates never include your practitioner profiles or signatures.</li>
+    <li><strong>Share Blank PDF…</strong> — the original imported PDF, byte-for-byte untouched.</li>
+  </ul>
+
+  <h3>Backup &amp; restore</h3>
+  <p><strong>Settings → Back Up Library…</strong> writes one file containing every template — field layouts <em>and</em> the original PDFs — plus your practitioner profiles and signatures, and can rebuild everything from scratch on a new iPad or after a reset. Backups contain no patient data. <strong>Restore from Backup…</strong> only ever adds: anything already in the library is left untouched.</p>
+
+  <h3>Reset App</h3>
+  <p><strong>Settings → Reset App…</strong> permanently erases all templates, imported PDFs, profiles, signatures, and the saved fill draft. Back up first.</p>
+</section>
+
+<!-- ============================ PRIVACY POLICY ============================ -->
+<section id="privacy-policy">
+  <h2>Privacy Policy</h2>
+  <p><em class="updated">Last updated: 18 July 2026</em></p>
+  <p>Form Filler is an iPad app for templating and filling PDF referral forms. It is designed so that your data — and in particular your patients' data — stays under your control on your device.</p>
+
+  <h3>The short version</h3>
+  <ul>
+    <li>Form Filler makes <strong>no network connections</strong>. Nothing you do in the app is transmitted anywhere.</li>
+    <li>There are <strong>no accounts, no analytics, no tracking, and no third-party services</strong>.</li>
+    <li>Patient information exists only in three places, all controlled by you: the current fill session, an <strong>encrypted draft on the device</strong>, and the <strong>PDF files you explicitly export</strong>.</li>
+  </ul>
+
+  <h3>What the app stores</h3>
+  <p><strong>Templates</strong> (the imported blank forms and their field layouts) are stored in the app's private storage on your iPad. Templates contain no patient information. They are included in normal device backups, and in any library backup file you choose to create.</p>
+  <p><strong>Fill-session drafts.</strong> While you fill a form, your entries are automatically saved to a single draft so they survive leaving the screen or quitting the app. This draft is encrypted (AES-GCM) with a key held in the device Keychain, restricted to this device only; <strong>excluded from iCloud and computer backups</strong> — it can never leave the iPad; and deleted when you use <strong>Clear form</strong>, choose <strong>Start Fresh</strong> at the resume prompt, or <strong>Reset App</strong>.</p>
+  <p><strong>Exported PDFs.</strong> A PDF you export contains the completed form, and additionally carries an invisible copy of the entry data so the app can reopen it for editing later. This embedded data contains the <strong>same information that is visibly printed on the form</strong> — no more — so sharing the PDF discloses nothing beyond the document itself. Where you send exported PDFs, and how long you keep them, is entirely up to you.</p>
+  <p><strong>Practitioner profiles.</strong> Your own professional details (name, office address, fax, phone, email, practitioner ID) and each profile's signature image are stored on the device to auto-fill practitioner and signature fields on forms, and are included in library backups. They are your information, not patient data; a signature appears on a form only when the template has a signature field.</p>
+  <p><strong>Library backups.</strong> A backup file you create from Settings contains your templates, their blank PDFs, your signature images, and your practitioner profiles — never patient data or drafts.</p>
+
+  <h3>What the app never does</h3>
+  <ul>
+    <li>It never modifies your original imported PDFs.</li>
+    <li>It never sends data over the network.</li>
+    <li>It never stores patient information outside the encrypted draft and the PDFs you export.</li>
+    <li>It never shares anything with third parties.</li>
+  </ul>
+
+  <h3>Your responsibilities</h3>
+  <p>Exported PDFs contain patient health information. Handle them according to your professional and legal obligations (e.g. your local health-privacy legislation). Form Filler's job is to ensure the only copies that exist are the ones you deliberately create.</p>
+</section>
+
+<!-- ============================ CONTACT ============================ -->
+<section id="contact">
+  <h2>Contact</h2>
+  <p>Questions, problems, or suggestions — email <a href="mailto:xbalsoftware@gmail.com">xbalsoftware@gmail.com</a>.</p>
+</section>
+
+</main>
+
+<footer class="site">
+  <p>Form Filler · Xbal Software</p>
+</footer>
+
+</body>
+</html>
