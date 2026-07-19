@@ -27,6 +27,11 @@ struct AboutView: View {
                     Label("Privacy Policy", systemImage: "hand.raised")
                 }
             }
+            Section("Contact") {
+                Link(destination: URL(string: "mailto:xbalsoftware@gmail.com")!) {
+                    Label("xbalsoftware@gmail.com", systemImage: "envelope")
+                }
+            }
         }
         .navigationTitle("About Form Filler")
         .navigationBarTitleDisplayMode(.inline)
