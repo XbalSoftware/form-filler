@@ -28,21 +28,19 @@ final class FillSessionViewModel {
         case entry, check, circle, comment
     }
 
-    /// A comment box being created or edited; drives the text alert in
-    /// the fill preview.
-    struct CommentPrompt: Identifiable, Equatable {
-        let id = UUID()
-        /// nil = creating a new comment at `rect`.
-        var markID: UUID?
-        var rect: CGRect
-        var text: String
+    /// A comment box being created or edited; drives the editor sheet on
+    /// the fill screen.
+    struct CommentEditorState: Identifiable, Equatable {
+        var mark: AdHocMark
+        let isNew: Bool
+        var id: UUID { mark.id }
     }
 
     var values: [UUID: FieldValue] = [:]
     /// Ad-hoc checkmarks/circles/comments — session data like `values`.
     var marks: [AdHocMark] = []
     var activeTool: FillTool = .entry
-    var commentPrompt: CommentPrompt?
+    var commentEditor: CommentEditorState?
     var focusedFieldID: UUID?
     var currentPageIndex = 0
     var errorMessage: String?
@@ -124,17 +122,11 @@ final class FillSessionViewModel {
     }
 
     /// True once anything would actually print (including static text,
-    /// ad-hoc marks, and applied signatures).
+    /// ad-hoc marks, and auto-stamped signatures).
     var hasExportableContent: Bool {
         !marks.isEmpty
             || template.fields.contains { displayText(for: $0) != nil }
-            || (signatureImage != nil && template.fields.contains { isSigned($0) })
-    }
-
-    /// Whether a signature field has been toggled on this session.
-    func isSigned(_ field: FieldDefinition) -> Bool {
-        guard field.type == .signature, case .checkbox(true) = values[field.id] else { return false }
-        return true
+            || (signatureImage != nil && template.fields.contains { $0.type == .signature })
     }
 
     /// Value of the template's patient-name field, if entered — it feeds
@@ -169,11 +161,13 @@ final class FillSessionViewModel {
         return url
     }
 
-    /// Fields the user fills in, in fill order. Static text and
-    /// practitioner fields are rendered automatically and never appear
+    /// Fields the user fills in, in fill order. Static text, practitioner
+    /// fields, and signatures are rendered automatically and never appear
     /// in the form.
     var formFields: [FieldDefinition] {
-        template.orderedFields.filter { $0.type != .staticText && !$0.type.isPractitionerField }
+        template.orderedFields.filter {
+            $0.type != .staticText && $0.type != .signature && !$0.type.isPractitionerField
+        }
     }
 
     /// Fields the keyboard next/previous buttons cycle through.
@@ -230,11 +224,9 @@ final class FillSessionViewModel {
         switch field.type {
         case .checkbox:
             toggleCheckbox(field)
-        case .staticText,
+        case .staticText, .signature,
              .doctorName, .officeAddress, .officeFax, .officePhone, .officeEmail, .practitionerID:
             break   // auto-populated; nothing to focus or toggle
-        case .signature:
-            if signatureImage != nil { toggleCheckbox(field) }
         case .singleLineText, .multiLineText, .date, .patientName:
             focusDidChange(to: field.id)
         }
@@ -279,7 +271,7 @@ final class FillSessionViewModel {
     func handleMarkTap(at pdfPoint: CGPoint, kind: AdHocMark.Kind) {
         if let hit = mark(at: pdfPoint, kind: kind) {
             if kind == .comment {
-                commentPrompt = CommentPrompt(markID: hit.id, rect: hit.rect, text: hit.text ?? "")
+                commentEditor = CommentEditorState(mark: hit, isNew: false)
             } else {
                 marks.removeAll { $0.id == hit.id }
             }
@@ -297,7 +289,7 @@ final class FillSessionViewModel {
             height: size.height
         )
         if kind == .comment {
-            commentPrompt = CommentPrompt(markID: nil, rect: rect, text: "")
+            promptComment(in: rect)
         } else {
             addMark(kind: kind, rect: rect)
         }
@@ -308,33 +300,32 @@ final class FillSessionViewModel {
         addMark(kind: .circle, rect: pdfRect)
     }
 
-    /// A dragged-out comment box: the rect is chosen, the text comes from
-    /// the prompt.
+    /// Opens the editor for a new comment box at `pdfRect`.
     func promptComment(in pdfRect: CGRect) {
-        commentPrompt = CommentPrompt(markID: nil, rect: pdfRect, text: "")
+        commentEditor = CommentEditorState(
+            mark: AdHocMark(kind: .comment, pageIndex: currentPageIndex, rect: pdfRect, text: ""),
+            isNew: true
+        )
     }
 
-    /// Resolves the comment prompt. Empty text deletes an existing
-    /// comment and discards a new one.
-    func commitComment(_ prompt: CommentPrompt, text: String) {
-        commentPrompt = nil
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let markID = prompt.markID {
-            if trimmed.isEmpty {
-                marks.removeAll { $0.id == markID }
-            } else if let index = marks.firstIndex(where: { $0.id == markID }) {
-                marks[index].text = trimmed
-            }
-        } else if !trimmed.isEmpty {
-            marks.append(AdHocMark(kind: .comment, pageIndex: currentPageIndex, rect: prompt.rect, text: trimmed))
+    /// Saves the edited comment. Empty text deletes an existing comment
+    /// and discards a new one.
+    func commitComment(_ mark: AdHocMark) {
+        commentEditor = nil
+        var updated = mark
+        updated.text = mark.text?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if updated.text?.isEmpty != false {
+            marks.removeAll { $0.id == mark.id }
+        } else if let index = marks.firstIndex(where: { $0.id == mark.id }) {
+            marks[index] = updated
+        } else {
+            marks.append(updated)
         }
     }
 
-    func deleteComment(_ prompt: CommentPrompt) {
-        commentPrompt = nil
-        if let markID = prompt.markID {
-            marks.removeAll { $0.id == markID }
-        }
+    func deleteComment(id: UUID) {
+        commentEditor = nil
+        marks.removeAll { $0.id == id }
     }
 
     private func addMark(kind: AdHocMark.Kind, rect: CGRect) {

@@ -114,25 +114,9 @@ struct FillFormListView: View {
             dateRow(for: field)
         case .checkbox:
             Toggle(field.name, isOn: checkboxBinding(for: field))
-        case .signature:
-            signatureRow(for: field)
-        case .staticText,
+        case .staticText, .signature,
              .doctorName, .officeAddress, .officeFax, .officePhone, .officeEmail, .practitionerID:
             EmptyView()   // never in formFields (auto-populated)
-        }
-    }
-
-    @ViewBuilder
-    private func signatureRow(for field: FieldDefinition) -> some View {
-        if viewModel.signatureImage != nil {
-            Toggle(field.name, isOn: checkboxBinding(for: field))
-        } else {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(field.name)
-                Text("Add a signature to your practitioner profile in Settings to sign this form.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
         }
     }
 

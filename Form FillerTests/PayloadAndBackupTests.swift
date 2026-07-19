@@ -116,6 +116,37 @@ struct ExportedPayloadTests {
     }
 }
 
+struct TemplateShareTests {
+    @Test func sharedPDFRoundTripsTemplate() throws {
+        let renderer = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 612, height: 792))
+        let pdfData = renderer.pdfData { context in
+            context.beginPage()
+            "BLANK FORM".draw(at: CGPoint(x: 40, y: 40), withAttributes: [
+                .font: UIFont(name: "Helvetica", size: 14)!,
+            ])
+        }
+        let template = Template(
+            name: "Shared Referral",
+            category: "Shared",
+            fields: [
+                FieldDefinition(name: "Patient Name", type: .patientName, rect: CGRect(x: 10, y: 700, width: 200, height: 24)),
+                FieldDefinition(name: "Notes", type: .multiLineText, rect: CGRect(x: 10, y: 500, width: 400, height: 120)),
+            ]
+        )
+
+        let shared = try TemplateShareService.pdfWithEmbeddedTemplate(template, pdfData: pdfData)
+        let decoded = try #require(TemplateShareService.embeddedTemplate(in: shared))
+        #expect(decoded == template)
+
+        // Page content survives the re-serialization.
+        #expect(PDFDocument(data: shared)?.page(at: 0)?.string?.contains("BLANK FORM") == true)
+        // An ordinary PDF has no template payload.
+        #expect(TemplateShareService.embeddedTemplate(in: pdfData) == nil)
+        // A template-share PDF is NOT mistaken for a fill export.
+        #expect(PDFExportService.embeddedPayload(in: shared) == nil)
+    }
+}
+
 struct LibraryBackupTests {
     private func makeStore() throws -> TemplateStore {
         let base = FileManager.default.temporaryDirectory

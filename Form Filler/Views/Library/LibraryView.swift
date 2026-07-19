@@ -18,6 +18,10 @@ struct LibraryView: View {
     @State private var isPickingExportedPDF = false
     @State private var isShowingSettings = false
     @State private var pendingImport: PendingImport?
+    /// A picked PDF that carries a shared template definition, awaiting
+    /// the import-as-template confirmation.
+    @State private var templateImport: PendingImport?
+    @State private var isConfirmingTemplateImport = false
     @State private var templateBeingEdited: Template?
     @State private var templateToDelete: Template?
     @State private var isConfirmingDelete = false
@@ -54,10 +58,28 @@ struct LibraryView: View {
         .fileImporter(isPresented: $isPickingFile, allowedContentTypes: [.pdf]) { result in
             switch result {
             case .success(let url):
-                pendingImport = viewModel.preparePendingImport(from: url)
+                guard let pending = viewModel.preparePendingImport(from: url) else { break }
+                if pending.embeddedTemplate != nil {
+                    templateImport = pending
+                    isConfirmingTemplateImport = true
+                } else {
+                    pendingImport = pending
+                }
             case .failure(let error):
                 viewModel.errorMessage = error.localizedDescription
             }
+        }
+        .alert(
+            "Form Filler Template",
+            isPresented: $isConfirmingTemplateImport,
+            presenting: templateImport
+        ) { pending in
+            Button("Import Template") { viewModel.importSharedTemplate(pending) }
+            Button("Import as Blank PDF") { pendingImport = pending }
+            Button("Cancel", role: .cancel) { templateImport = nil }
+        } message: { pending in
+            let template = pending.embeddedTemplate
+            Text("This PDF was shared from Form Filler and contains the template \"\(template?.name ?? "")\" with \(template?.fields.count ?? 0) fields. Import it ready to fill?")
         }
         .background {
             // fileImporter allows one presentation per view, so the second

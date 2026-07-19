@@ -29,9 +29,7 @@ nonisolated struct AdHocMark: Codable, Identifiable, Equatable, Sendable {
         }
     }
 
-    /// Comments render with this fixed style (no per-mark styling).
-    static let commentFontName = "Helvetica"
-    static let commentFontSize: CGFloat = 12
+    static let defaultCommentFontSize: CGFloat = 12
 
     /// Default footprint of a tapped-in checkmark, PDF points.
     static let defaultCheckSize = CGSize(width: 16, height: 16)
@@ -46,13 +44,32 @@ nonisolated struct AdHocMark: Codable, Identifiable, Equatable, Sendable {
     var rect: CGRect
     /// Comment kind only: the typed note.
     var text: String?
+    // Comment styling (nil = defaults: 12pt, regular, no border, transparent).
+    var fontSize: CGFloat?
+    var isBold: Bool?
+    var showsBorder: Bool?
+    var whiteBackground: Bool?
 
-    init(id: UUID = UUID(), kind: Kind, pageIndex: Int, rect: CGRect, text: String? = nil) {
+    init(
+        id: UUID = UUID(),
+        kind: Kind,
+        pageIndex: Int,
+        rect: CGRect,
+        text: String? = nil,
+        fontSize: CGFloat? = nil,
+        isBold: Bool? = nil,
+        showsBorder: Bool? = nil,
+        whiteBackground: Bool? = nil
+    ) {
         self.id = id
         self.kind = kind
         self.pageIndex = pageIndex
         self.rect = rect
         self.text = text
+        self.fontSize = fontSize
+        self.isBold = isBold
+        self.showsBorder = showsBorder
+        self.whiteBackground = whiteBackground
     }
 
     init(from decoder: any Decoder) throws {
@@ -63,5 +80,15 @@ nonisolated struct AdHocMark: Codable, Identifiable, Equatable, Sendable {
         rect = try container.decodeIfPresent(CGRect.self, forKey: .rect)
             ?? CGRect(origin: .zero, size: Self.defaultCheckSize)
         text = try container.decodeIfPresent(String.self, forKey: .text)
+        fontSize = try container.decodeIfPresent(CGFloat.self, forKey: .fontSize)
+        isBold = try container.decodeIfPresent(Bool.self, forKey: .isBold)
+        showsBorder = try container.decodeIfPresent(Bool.self, forKey: .showsBorder)
+        whiteBackground = try container.decodeIfPresent(Bool.self, forKey: .whiteBackground)
     }
+
+    // Resolved comment style, shared by the preview and the export.
+    var resolvedFontSize: CGFloat { fontSize ?? Self.defaultCommentFontSize }
+    var resolvedFontName: String { (isBold ?? false) ? "Helvetica-Bold" : "Helvetica" }
+    var hasBorder: Bool { showsBorder ?? false }
+    var hasWhiteBackground: Bool { whiteBackground ?? false }
 }

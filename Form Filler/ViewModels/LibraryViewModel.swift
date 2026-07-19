@@ -9,11 +9,15 @@ import PDFKit
 import UIKit
 
 /// A PDF picked via the file importer, validated and held in memory until
-/// the user names it in the import sheet.
+/// the user names it in the import sheet (or, when it carries a shared
+/// template definition, confirms the template import).
 struct PendingImport: Identifiable {
     let id = UUID()
     let data: Data
     let suggestedName: String
+    /// Non-nil when the PDF was shared from Form Filler with its template
+    /// definition embedded.
+    let embeddedTemplate: Template?
 }
 
 @MainActor
@@ -189,7 +193,28 @@ final class LibraryViewModel {
             errorMessage = "\"\(url.lastPathComponent)\" doesn't appear to be a valid PDF."
             return nil
         }
-        return PendingImport(data: data, suggestedName: url.deletingPathExtension().lastPathComponent)
+        return PendingImport(
+            data: data,
+            suggestedName: url.deletingPathExtension().lastPathComponent,
+            embeddedTemplate: TemplateShareService.embeddedTemplate(in: data)
+        )
+    }
+
+    /// Imports a colleague-shared PDF as a full template (fields and
+    /// all). Keeps the author's template ID so re-imports are detected
+    /// rather than duplicated.
+    func importSharedTemplate(_ pending: PendingImport) {
+        guard var template = pending.embeddedTemplate else { return }
+        template.modifiedAt = .now
+        do {
+            try store.create(template, pdfData: pending.data)
+            refresh()
+            infoMessage = "Imported template \"\(template.name)\" with \(template.fields.count) field\(template.fields.count == 1 ? "" : "s")."
+        } catch TemplateStoreError.templateAlreadyExists {
+            errorMessage = "\"\(template.name)\" is already in the library."
+        } catch {
+            errorMessage = "Import failed: \(error.localizedDescription)"
+        }
     }
 
     func importTemplate(_ pending: PendingImport, name: String, category: String) {

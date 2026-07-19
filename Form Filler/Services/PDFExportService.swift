@@ -129,9 +129,9 @@ nonisolated struct PDFExportService: Sendable {
                     if let text = FieldValueFormatting.displayText(for: field, value: values[field.id]) {
                         drawFieldText(text, field: field, space: space)
                     }
-                    if let signature,
-                       field.type == .signature,
-                       case .checkbox(true) = values[field.id] {
+                    // Signature fields auto-stamp from the selected profile,
+                    // like the other practitioner-sourced content.
+                    if let signature, field.type == .signature {
                         drawSignature(signature, field: field, space: space)
                     }
                 }
@@ -169,21 +169,30 @@ nonisolated struct PDFExportService: Sendable {
 
         if mark.kind == .comment {
             guard let text = mark.text, !text.isEmpty else { return }
+            if mark.hasWhiteBackground {
+                ctx.setFillColor(UIColor.white.cgColor)
+                ctx.fill(rect)
+            }
             let fontSize = TextFitting.fittedFontSize(
                 for: text,
-                fontName: AdHocMark.commentFontName,
-                preferredSize: AdHocMark.commentFontSize,
+                fontName: mark.resolvedFontName,
+                preferredSize: mark.resolvedFontSize,
                 in: rect.size,
                 multiline: true
             )
             let paragraph = NSMutableParagraphStyle()
             paragraph.lineBreakMode = .byWordWrapping
             let attributed = NSAttributedString(string: text, attributes: [
-                .font: UIFont(name: AdHocMark.commentFontName, size: fontSize) ?? .systemFont(ofSize: fontSize),
+                .font: UIFont(name: mark.resolvedFontName, size: fontSize) ?? .systemFont(ofSize: fontSize),
                 .foregroundColor: UIColor.black,
                 .paragraphStyle: paragraph,
             ])
             attributed.draw(with: rect, options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
+            if mark.hasBorder {
+                ctx.setStrokeColor(UIColor.black.cgColor)
+                ctx.setLineWidth(1)
+                ctx.stroke(rect)
+            }
             return
         }
 
@@ -228,7 +237,9 @@ nonisolated struct PDFExportService: Sendable {
     /// Keywords via CGPDFDocument.info (the write path's ground truth),
     /// plus PDFKit's read as a fallback — it surfaces the attribute as
     /// either a string or an array depending on how the PDF was written.
-    private static func keywordsCandidates(in data: Data) -> [String] {
+    /// Internal: TemplateShareService reads the same key for its own
+    /// prefix.
+    static func keywordsCandidates(in data: Data) -> [String] {
         var candidates: [String] = []
         if let provider = CGDataProvider(data: data as CFData),
            let document = CGPDFDocument(provider),

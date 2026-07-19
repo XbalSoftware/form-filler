@@ -19,8 +19,6 @@ struct FillPageOverlayView: View {
     /// Live outline while dragging out a circle or comment box, in page
     /// view space.
     @State private var draggedCircleRect: CGRect?
-    /// Working text for the comment alert.
-    @State private var commentText = ""
 
     var body: some View {
         ZStack {
@@ -28,7 +26,7 @@ struct FillPageOverlayView: View {
                 FillFieldOverlay(
                     field: field,
                     text: viewModel.displayText(for: field),
-                    signatureImage: viewModel.isSigned(field) ? viewModel.signatureImage : nil,
+                    signatureImage: field.type == .signature ? viewModel.signatureImage : nil,
                     isFocused: viewModel.focusedFieldID == field.id,
                     viewRect: space.viewRect(fromPDFRect: field.rect, in: pageSize),
                     scale: scale
@@ -46,30 +44,6 @@ struct FillPageOverlayView: View {
                 markToolLayer
             }
         }
-        .alert(
-            "Comment",
-            isPresented: commentPromptBinding,
-            presenting: viewModel.commentPrompt
-        ) { prompt in
-            TextField("Comment", text: $commentText)
-            Button("Save") { viewModel.commitComment(prompt, text: commentText) }
-            if prompt.markID != nil {
-                Button("Delete", role: .destructive) { viewModel.deleteComment(prompt) }
-            }
-            Button("Cancel", role: .cancel) { viewModel.commentPrompt = nil }
-        } message: { _ in
-            Text("Printed in the comment box, auto-shrunk to fit.")
-        }
-        .onChange(of: viewModel.commentPrompt?.id) { _, _ in
-            commentText = viewModel.commentPrompt?.text ?? ""
-        }
-    }
-
-    private var commentPromptBinding: Binding<Bool> {
-        Binding(
-            get: { viewModel.commentPrompt != nil },
-            set: { if !$0 { viewModel.commentPrompt = nil } }
-        )
     }
 
     private var scale: CGFloat {
@@ -182,16 +156,24 @@ private struct MarkOverlay: View {
         let fitBox = CGSize(width: viewRect.width / scale, height: viewRect.height / scale)
         let fitted = TextFitting.fittedFontSize(
             for: text,
-            fontName: AdHocMark.commentFontName,
-            preferredSize: AdHocMark.commentFontSize,
+            fontName: mark.resolvedFontName,
+            preferredSize: mark.resolvedFontSize,
             in: fitBox,
             multiline: true
         )
         return Text(text)
-            .font(.custom(AdHocMark.commentFontName, fixedSize: fitted * scale))
+            .font(.custom(mark.resolvedFontName, fixedSize: fitted * scale))
             .foregroundStyle(.black)
             .frame(width: viewRect.width, height: viewRect.height, alignment: .topLeading)
             .clipped()
+            .background {
+                if mark.hasWhiteBackground { Color.white }
+            }
+            .overlay {
+                if mark.hasBorder {
+                    Rectangle().strokeBorder(Color.black, lineWidth: max(1, scale))
+                }
+            }
     }
 
     private var accessibilityDescription: String {

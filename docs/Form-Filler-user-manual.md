@@ -35,7 +35,7 @@ Open a template and tap **Edit Template**.
 | Checkbox | Tap to toggle; prints an X |
 | Static Text | Fixed text printed on every copy (e.g. your provider number) |
 | Patient Name | Like single-line text, but its value is also added to the exported file's name. One per form. |
-| Signature | Stamps your stored signature (see below); toggled on per form |
+| Signature | Auto-stamps the selected profile's signature (see below), like the other practitioner fields |
 | Doctor Name, Office Address, Office Fax, Office Phone, Email, Practitioner ID | Auto-filled from your practitioner profile (see below); never typed per form |
 
 ## Practitioner profiles
@@ -44,7 +44,7 @@ Enter your own details once in **Settings → Practitioner Profiles** — doctor
 
 ## Your signature
 
-Each practitioner profile carries its own signature: in **Settings → Practitioner Profiles**, open a profile and draw the signature with a finger or Apple Pencil, or import a PNG/JPEG (a PNG with a transparent background works best). Place **Signature** fields on any template that needs signing; while filling, flip the field's toggle (or tap its box on the preview) to stamp the selected profile's signature, scaled to fit — switching profile switches the signature. Signatures live inside the profiles, so they're included in library backups automatically.
+Each practitioner profile carries its own signature: in **Settings → Practitioner Profiles**, open a profile and draw the signature with a finger or Apple Pencil, or import a PNG/JPEG (a PNG with a transparent background works best). Place **Signature** fields on any template that needs signing and they stamp themselves automatically from the selected profile — no per-form step, and switching profile switches the signature. Signatures live inside the profiles, so they're included in library backups automatically.
 
 ## Filling a form
 
@@ -52,7 +52,7 @@ Open a template and tap **Fill Form**. The form list is on the left; a live prev
 
 - **Keyboard flow**: Tab (or the ▲/▼ toolbar buttons) moves between fields. In multi-line fields, Return starts a new line and Tab still moves on. Nothing is auto-capitalised.
 - **Tap the preview** to jump to a field, toggle a checkbox, or focus a text box.
-- **Checkmark, circle, and comment tools**: above the preview, switch from **Type** to **Checkmark** (tap the form to stamp a tick — for ticking boxes printed on the form itself, no template field needed), **Circle** (drag to ring an item), or **Comment** (tap or drag out a box, then type a one-off note — no template edit needed). Tap a check or circle to remove it; tap a comment to edit or delete it.
+- **Checkmark, circle, and comment tools**: above the preview, switch from **Type** to **Checkmark** (tap the form to stamp a tick — for ticking boxes printed on the form itself, no template field needed), **Circle** (drag to ring an item), or **Comment** (tap or drag out a box, then type a one-off note — no template edit needed). Comments support multiple lines and have their own styling: text size, bold, an optional black border, and an optional white background. Tap a check or circle to remove it; tap a comment to edit or delete it.
 - **Drafts**: your entries autosave every few seconds to an encrypted draft that never leaves the iPad. You can leave the screen — even go adjust the template — and pick up where you left off; you'll be offered **Resume** when you return. **Clear form** (top left) erases the entries and the draft.
 
 ## Exporting
@@ -76,6 +76,13 @@ Notes:
 - Only PDFs exported by Form Filler can be reopened, and the matching template must still be in your library.
 - Another app that rewrites the PDF may strip the hidden data.
 - The data inside is the same information visible on the page — sharing the PDF shares no more than what's printed on it.
+
+## Sharing a template with a colleague
+
+From a template's screen, the share button offers:
+
+- **Share Template…** — produces a normal, viewable PDF of the blank form that invisibly carries the template's field layout. A colleague running Form Filler just uses **＋ Import PDF** on it: the app recognises it and offers *Import Template*, recreating the template ready to fill (or *Import as Blank PDF* to ignore the layout). Shared templates never include your practitioner profiles or signatures.
+- **Share Blank PDF…** — the original imported PDF, byte-for-byte untouched, for when someone just needs the form itself.
 
 ## Backup & restore
 

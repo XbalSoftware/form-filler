@@ -70,6 +70,14 @@ struct FillSessionView: View {
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
+        .sheet(item: Bindable(viewModel).commentEditor) { state in
+            CommentEditorSheet(
+                state: state,
+                onSave: { viewModel.commitComment($0) },
+                onDelete: { viewModel.deleteComment(id: $0) },
+                onCancel: { viewModel.commentEditor = nil }
+            )
+        }
         .onAppear {
             // Skip the prompt when the session already has values (e.g. a
             // reopened exported PDF, or returning from the editor).
