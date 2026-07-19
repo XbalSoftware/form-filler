@@ -33,7 +33,10 @@ struct FillPageOverlayView: View {
                 )
                 .onTapGesture { viewModel.handleOverlayTap(field) }
             }
-            ForEach(viewModel.marks(onPage: viewModel.currentPageIndex)) { mark in
+            // Comments become interactive (move/resize/edit) while the
+            // Comment tool is active, so they render ABOVE the tool layer
+            // then; everything else stays a static, untouchable overlay.
+            ForEach(staticMarks) { mark in
                 MarkOverlay(
                     mark: mark,
                     viewRect: space.viewRect(fromPDFRect: mark.rect, in: pageSize),
@@ -43,7 +46,28 @@ struct FillPageOverlayView: View {
             if viewModel.activeTool != .entry {
                 markToolLayer
             }
+            if viewModel.activeTool == .comment {
+                ForEach(viewModel.marks(onPage: viewModel.currentPageIndex).filter { $0.kind == .comment }) { mark in
+                    InteractiveCommentOverlay(
+                        mark: mark,
+                        viewRect: space.viewRect(fromPDFRect: mark.rect, in: pageSize),
+                        scale: scale,
+                        onTap: { viewModel.editComment(mark) },
+                        onCommit: { rect in
+                            viewModel.setCommentRect(id: mark.id, pdfRect: space.pdfRect(fromViewRect: rect, in: pageSize))
+                        }
+                    )
+                }
+            }
         }
+        .coordinateSpace(name: Self.coordinateSpaceName)
+    }
+
+    static let coordinateSpaceName = "fillPage"
+
+    private var staticMarks: [AdHocMark] {
+        let marks = viewModel.marks(onPage: viewModel.currentPageIndex)
+        return viewModel.activeTool == .comment ? marks.filter { $0.kind != .comment } : marks
     }
 
     private var scale: CGFloat {
@@ -132,7 +156,7 @@ private struct MarkOverlay: View {
     var body: some View {
         Group {
             if mark.kind == .comment {
-                commentText
+                CommentBoxView(mark: mark, boxSize: viewRect.size, scale: scale)
             } else {
                 MarkShape(kind: mark.kind)
                     .stroke(
@@ -151,9 +175,26 @@ private struct MarkOverlay: View {
         .accessibilityLabel(accessibilityDescription)
     }
 
-    private var commentText: some View {
+    private var accessibilityDescription: String {
+        switch mark.kind {
+        case .check: "Checkmark"
+        case .circle: "Circle mark"
+        case .comment: "Comment: \(mark.text ?? "")"
+        }
+    }
+}
+
+/// A comment's rendered content (styled fitted text, optional white
+/// background and border) at a given box size — shared by the static
+/// overlay and the interactive move/resize wrapper.
+private struct CommentBoxView: View {
+    let mark: AdHocMark
+    let boxSize: CGSize
+    let scale: CGFloat
+
+    var body: some View {
         let text = mark.text ?? ""
-        let fitBox = CGSize(width: viewRect.width / scale, height: viewRect.height / scale)
+        let fitBox = CGSize(width: boxSize.width / scale, height: boxSize.height / scale)
         let fitted = TextFitting.fittedFontSize(
             for: text,
             fontName: mark.resolvedFontName,
@@ -161,10 +202,10 @@ private struct MarkOverlay: View {
             in: fitBox,
             multiline: true
         )
-        return Text(text)
+        Text(text)
             .font(.custom(mark.resolvedFontName, fixedSize: fitted * scale))
             .foregroundStyle(.black)
-            .frame(width: viewRect.width, height: viewRect.height, alignment: .topLeading)
+            .frame(width: boxSize.width, height: boxSize.height, alignment: .topLeading)
             .clipped()
             .background {
                 if mark.hasWhiteBackground { Color.white }
@@ -175,13 +216,95 @@ private struct MarkOverlay: View {
                 }
             }
     }
+}
 
-    private var accessibilityDescription: String {
-        switch mark.kind {
-        case .check: "Checkmark"
-        case .circle: "Circle mark"
-        case .comment: "Comment: \(mark.text ?? "")"
+/// Comment-tool affordances for an existing comment: drag the body to
+/// move, drag the corner dot to resize, tap to edit. Commits go back in
+/// view space; the parent converts to PDF space.
+private struct InteractiveCommentOverlay: View {
+    let mark: AdHocMark
+    let viewRect: CGRect
+    let scale: CGFloat
+    let onTap: () -> Void
+    let onCommit: (CGRect) -> Void
+
+    @State private var moveTranslation: CGSize = .zero
+    @State private var isMoving = false
+    @State private var liveResizeRect: CGRect?
+
+    private static let minimumSize = CGSize(width: 24, height: 16)
+
+    private var displayRect: CGRect {
+        if let liveResizeRect { return liveResizeRect }
+        if isMoving {
+            return viewRect.offsetBy(dx: moveTranslation.width, dy: moveTranslation.height)
         }
+        return viewRect
+    }
+
+    var body: some View {
+        ZStack {
+            CommentBoxView(mark: mark, boxSize: displayRect.size, scale: scale)
+                .frame(width: displayRect.width, height: displayRect.height)
+                .overlay {
+                    Rectangle().strokeBorder(
+                        Color.accentColor.opacity(0.8),
+                        style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+                    )
+                }
+                .contentShape(Rectangle())
+                .position(x: displayRect.midX, y: displayRect.midY)
+                .onTapGesture(perform: onTap)
+                .gesture(moveGesture)
+            resizeHandle
+        }
+        .accessibilityLabel("Comment: \(mark.text ?? ""), movable")
+    }
+
+    private var moveGesture: some Gesture {
+        DragGesture(minimumDistance: 3)
+            .onChanged { value in
+                isMoving = true
+                moveTranslation = value.translation
+            }
+            .onEnded { value in
+                let final = viewRect.offsetBy(dx: value.translation.width, dy: value.translation.height)
+                isMoving = false
+                moveTranslation = .zero
+                onCommit(final)
+            }
+    }
+
+    private var resizeHandle: some View {
+        Circle()
+            .fill(.background)
+            .stroke(Color.accentColor, lineWidth: 2)
+            .frame(width: 12, height: 12)
+            .contentShape(Circle().inset(by: -10))
+            .position(x: displayRect.maxX, y: displayRect.maxY)
+            .gesture(
+                DragGesture(
+                    minimumDistance: 1,
+                    coordinateSpace: .named(FillPageOverlayView.coordinateSpaceName)
+                )
+                .onChanged { value in
+                    liveResizeRect = resizedRect(to: value.location)
+                }
+                .onEnded { value in
+                    let final = resizedRect(to: value.location)
+                    liveResizeRect = nil
+                    onCommit(final)
+                }
+            )
+    }
+
+    private func resizedRect(to location: CGPoint) -> CGRect {
+        CGRect(
+            x: viewRect.minX,
+            y: viewRect.minY,
+            width: max(location.x - viewRect.minX, Self.minimumSize.width),
+            height: max(location.y - viewRect.minY, Self.minimumSize.height)
+        )
     }
 }
 

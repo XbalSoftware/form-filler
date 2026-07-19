@@ -328,6 +328,17 @@ final class FillSessionViewModel {
         marks.removeAll { $0.id == id }
     }
 
+    /// Commits a comment move/resize (Comment tool only). `pdfRect` is in
+    /// PDF space.
+    func setCommentRect(id: UUID, pdfRect: CGRect) {
+        guard let index = marks.firstIndex(where: { $0.id == id }) else { return }
+        marks[index].rect = pdfRect
+    }
+
+    func editComment(_ mark: AdHocMark) {
+        commentEditor = CommentEditorState(mark: mark, isNew: false)
+    }
+
     private func addMark(kind: AdHocMark.Kind, rect: CGRect) {
         marks.append(AdHocMark(kind: kind, pageIndex: currentPageIndex, rect: rect))
     }

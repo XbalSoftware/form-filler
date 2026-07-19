@@ -186,7 +186,7 @@ struct FillSessionView: View {
         case .entry: ""
         case .check: "Tap the form to place a checkmark · tap a checkmark to remove it"
         case .circle: "Drag to circle an item · tap a circle to remove it"
-        case .comment: "Tap or drag out a box to add a comment · tap a comment to edit or delete it"
+        case .comment: "Tap or drag out a box to add a comment · tap to edit · drag to move · corner dot resizes"
         }
     }
 
