@@ -28,6 +28,7 @@ struct EditorPageOverlayView: View {
                 FieldOverlayView(
                     field: field,
                     baseRect: space.viewRect(fromPDFRect: field.rect, in: pageSize),
+                    scale: space.displaySize.width > 0 ? pageSize.width / space.displaySize.width : 1,
                     isSelected: viewModel.selectedFieldID == field.id,
                     onTap: { viewModel.select(field) },
                     snap: { viewModel.snappedRect(for: $0, excluding: field.id, space: space, pageSize: pageSize) },

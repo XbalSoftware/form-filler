@@ -93,6 +93,22 @@ final class TemplateEditorViewModel {
         return true
     }
 
+    /// Tab/Shift-Tab in the inspector's name box: selects the next or
+    /// previous field in fill order with ITS name ready to type over —
+    /// so a whole form can be named without leaving the detail view.
+    /// Returns false at either end (the keypress falls through).
+    func selectAdjacentField(offset: Int) -> Bool {
+        let ordered = orderedFields
+        guard let selectedFieldID,
+              let index = ordered.firstIndex(where: { $0.id == selectedFieldID }),
+              ordered.indices.contains(index + offset)
+        else { return false }
+        let field = ordered[index + offset]
+        select(field)
+        fieldAwaitingName = field.id
+        return true
+    }
+
     /// Commits a move or resize. The rect arrives in view space; it's
     /// clamped to the page and minimum size, then stored in PDF space.
     func setFieldRect(_ id: UUID, fromViewRect rect: CGRect, space: PageCoordinateSpace, pageSize: CGSize) {

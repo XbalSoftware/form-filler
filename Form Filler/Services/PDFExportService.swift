@@ -31,11 +31,12 @@ nonisolated struct PDFExportService: Sendable {
 
     // MARK: - Filename & temp files
 
-    /// `<TemplateName> – <PatientName> – <yyyy-MM-dd>.pdf`, or without the
-    /// patient segment when no patient-name field is filled. Including the
-    /// patient name is a deliberate user decision (2026-07-17) that
-    /// supersedes the original never-in-filename rule; it only ever comes
-    /// from a field the user explicitly typed into.
+    /// `<PatientName> – <TemplateName> – <yyyy-MM-dd>.pdf` (patient first —
+    /// user decision 2026-07-18), or without the patient segment when no
+    /// patient-name field is filled. Including the patient name is a
+    /// deliberate user decision (2026-07-17) that supersedes the original
+    /// never-in-filename rule; it only ever comes from a field the user
+    /// explicitly typed into.
     static func defaultFileName(
         for template: Template,
         patientName: String? = nil,
@@ -43,10 +44,11 @@ nonisolated struct PDFExportService: Sendable {
     ) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
-        var parts = [sanitized(template.name)]
+        var parts: [String] = []
         if let patientName, let safePatient = nonEmpty(sanitized(patientName)) {
             parts.append(safePatient)
         }
+        parts.append(sanitized(template.name))
         parts.append(formatter.string(from: date))
         return parts.joined(separator: " – ") + ".pdf"
     }
@@ -158,11 +160,33 @@ nonisolated struct PDFExportService: Sendable {
         ))
     }
 
-    /// Draws an ad-hoc checkmark or circle as vector strokes in display
-    /// space. `MarkGeometry` supplies the same paths the preview overlay
-    /// renders, so the two can never disagree.
+    /// Draws an ad-hoc mark in display space. Checks/circles are vector
+    /// strokes from `MarkGeometry` (the same paths the preview renders);
+    /// comments are wrapped text auto-shrunk into their box, same
+    /// TextFitting call as the preview.
     private func drawMark(_ mark: AdHocMark, space: PageCoordinateSpace, in ctx: CGContext) {
         let rect = space.viewRect(fromPDFRect: mark.rect, in: space.displaySize)
+
+        if mark.kind == .comment {
+            guard let text = mark.text, !text.isEmpty else { return }
+            let fontSize = TextFitting.fittedFontSize(
+                for: text,
+                fontName: AdHocMark.commentFontName,
+                preferredSize: AdHocMark.commentFontSize,
+                in: rect.size,
+                multiline: true
+            )
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.lineBreakMode = .byWordWrapping
+            let attributed = NSAttributedString(string: text, attributes: [
+                .font: UIFont(name: AdHocMark.commentFontName, size: fontSize) ?? .systemFont(ofSize: fontSize),
+                .foregroundColor: UIColor.black,
+                .paragraphStyle: paragraph,
+            ])
+            attributed.draw(with: rect, options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
+            return
+        }
+
         ctx.saveGState()
         ctx.setStrokeColor(UIColor.black.cgColor)
         ctx.setLineWidth(MarkGeometry.lineWidth(for: rect))

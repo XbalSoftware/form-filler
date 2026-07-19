@@ -161,9 +161,11 @@ struct FillSessionView: View {
                     .tag(FillSessionViewModel.FillTool.check)
                 Label("Circle", systemImage: "circle")
                     .tag(FillSessionViewModel.FillTool.circle)
+                Label("Comment", systemImage: "text.bubble")
+                    .tag(FillSessionViewModel.FillTool.comment)
             }
             .pickerStyle(.segmented)
-            .frame(maxWidth: 380)
+            .frame(maxWidth: 460)
             Text(toolHint)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -176,6 +178,7 @@ struct FillSessionView: View {
         case .entry: ""
         case .check: "Tap the form to place a checkmark · tap a checkmark to remove it"
         case .circle: "Drag to circle an item · tap a circle to remove it"
+        case .comment: "Tap or drag out a box to add a comment · tap a comment to edit or delete it"
         }
     }
 

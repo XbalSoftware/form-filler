@@ -23,15 +23,26 @@ final class FillSessionViewModel {
     let pdfURL: URL
 
     /// What a tap on the preview does: enter values, stamp a checkmark,
-    /// or draw a circle.
+    /// draw a circle, or place a typed comment box.
     enum FillTool: Hashable {
-        case entry, check, circle
+        case entry, check, circle, comment
+    }
+
+    /// A comment box being created or edited; drives the text alert in
+    /// the fill preview.
+    struct CommentPrompt: Identifiable, Equatable {
+        let id = UUID()
+        /// nil = creating a new comment at `rect`.
+        var markID: UUID?
+        var rect: CGRect
+        var text: String
     }
 
     var values: [UUID: FieldValue] = [:]
-    /// Ad-hoc checkmarks/circles — session data like `values`.
+    /// Ad-hoc checkmarks/circles/comments — session data like `values`.
     var marks: [AdHocMark] = []
     var activeTool: FillTool = .entry
+    var commentPrompt: CommentPrompt?
     var focusedFieldID: UUID?
     var currentPageIndex = 0
     var errorMessage: String?
@@ -259,21 +270,37 @@ final class FillSessionViewModel {
         marks.filter { $0.pageIndex == index }
     }
 
-    /// Handles a tap on the preview while a mark tool is active: removes
-    /// the mark under the finger if there is one, otherwise places a new
-    /// default-size mark centered on the tap. `pdfPoint` is in PDF space.
+    /// Handles a tap on the preview while a mark tool is active.
+    /// Check/circle: removes a same-kind mark under the finger, otherwise
+    /// places a default-size one. Comment: opens the editor for the
+    /// comment under the finger, otherwise prompts for a new one — a tap
+    /// with the wrong tool never deletes a typed comment.
+    /// `pdfPoint` is in PDF space.
     func handleMarkTap(at pdfPoint: CGPoint, kind: AdHocMark.Kind) {
-        if let hit = mark(at: pdfPoint) {
-            marks.removeAll { $0.id == hit.id }
+        if let hit = mark(at: pdfPoint, kind: kind) {
+            if kind == .comment {
+                commentPrompt = CommentPrompt(markID: hit.id, rect: hit.rect, text: hit.text ?? "")
+            } else {
+                marks.removeAll { $0.id == hit.id }
+            }
             return
         }
-        let size = kind == .check ? AdHocMark.defaultCheckSize : AdHocMark.defaultCircleSize
-        addMark(kind: kind, rect: CGRect(
+        let size = switch kind {
+        case .check: AdHocMark.defaultCheckSize
+        case .circle: AdHocMark.defaultCircleSize
+        case .comment: AdHocMark.defaultCommentSize
+        }
+        let rect = CGRect(
             x: pdfPoint.x - size.width / 2,
             y: pdfPoint.y - size.height / 2,
             width: size.width,
             height: size.height
-        ))
+        )
+        if kind == .comment {
+            commentPrompt = CommentPrompt(markID: nil, rect: rect, text: "")
+        } else {
+            addMark(kind: kind, rect: rect)
+        }
     }
 
     /// Commits a dragged-out circle. `pdfRect` is in PDF space.
@@ -281,15 +308,44 @@ final class FillSessionViewModel {
         addMark(kind: .circle, rect: pdfRect)
     }
 
+    /// A dragged-out comment box: the rect is chosen, the text comes from
+    /// the prompt.
+    func promptComment(in pdfRect: CGRect) {
+        commentPrompt = CommentPrompt(markID: nil, rect: pdfRect, text: "")
+    }
+
+    /// Resolves the comment prompt. Empty text deletes an existing
+    /// comment and discards a new one.
+    func commitComment(_ prompt: CommentPrompt, text: String) {
+        commentPrompt = nil
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let markID = prompt.markID {
+            if trimmed.isEmpty {
+                marks.removeAll { $0.id == markID }
+            } else if let index = marks.firstIndex(where: { $0.id == markID }) {
+                marks[index].text = trimmed
+            }
+        } else if !trimmed.isEmpty {
+            marks.append(AdHocMark(kind: .comment, pageIndex: currentPageIndex, rect: prompt.rect, text: trimmed))
+        }
+    }
+
+    func deleteComment(_ prompt: CommentPrompt) {
+        commentPrompt = nil
+        if let markID = prompt.markID {
+            marks.removeAll { $0.id == markID }
+        }
+    }
+
     private func addMark(kind: AdHocMark.Kind, rect: CGRect) {
         marks.append(AdHocMark(kind: kind, pageIndex: currentPageIndex, rect: rect))
     }
 
-    /// The topmost mark on the current page containing the point (with a
-    /// little slop so small checkmarks are removable).
-    private func mark(at pdfPoint: CGPoint) -> AdHocMark? {
+    /// The topmost same-kind mark on the current page containing the
+    /// point (with a little slop so small checkmarks are hittable).
+    private func mark(at pdfPoint: CGPoint, kind: AdHocMark.Kind) -> AdHocMark? {
         marks(onPage: currentPageIndex).last {
-            $0.rect.insetBy(dx: -4, dy: -4).contains(pdfPoint)
+            $0.kind == kind && $0.rect.insetBy(dx: -4, dy: -4).contains(pdfPoint)
         }
     }
 

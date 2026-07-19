@@ -13,6 +13,9 @@ import SwiftUI
 struct FieldOverlayView: View {
     let field: FieldDefinition
     let baseRect: CGRect                 // view space at zoom 1
+    /// View points per PDF point — needed to render the name label at the
+    /// exact size fill-mode text will render.
+    let scale: CGFloat
     let isSelected: Bool
     let onTap: () -> Void
     let snap: (CGRect) -> CGRect
@@ -64,16 +67,8 @@ struct FieldOverlayView: View {
                         lineWidth: isSelected ? 2 : 1
                     )
             }
-            .overlay(alignment: .leading) {
-                // The field's name rides inside the box (including while
-                // dragging/resizing — displayRect is the live rect) so it's
-                // always clear which inspector row is which box.
-                Text(field.name)
-                    .font(.system(size: max(7, min(10, displayRect.height * 0.55))))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .foregroundStyle(.gray)
-                    .padding(.horizontal, 3)
+            .overlay {
+                nameLabel
             }
             .frame(width: displayRect.width, height: displayRect.height)
             .position(x: displayRect.midX, y: displayRect.midY)
@@ -81,6 +76,48 @@ struct FieldOverlayView: View {
             .gesture(moveGesture)
             .accessibilityLabel("\(field.name), \(field.type.displayName) field")
             .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    /// The field's name inside its box — rendered with the SAME fitting,
+    /// font, and alignment fill mode will use for the entered text, so
+    /// alignment can be perfected right in the editor (grey marks it as a
+    /// placeholder). Checkbox/signature fields keep a small caption label
+    /// since their content isn't styled text.
+    @ViewBuilder
+    private var nameLabel: some View {
+        if field.type == .checkbox || field.type == .signature {
+            Text(field.name)
+                .font(.system(size: max(7, min(10, displayRect.height * 0.55))))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .foregroundStyle(.gray)
+                .padding(.horizontal, 3)
+                .frame(width: displayRect.width, height: displayRect.height, alignment: .leading)
+        } else {
+            let fitBox = CGSize(width: displayRect.width / scale, height: displayRect.height / scale)
+            let fitted = TextFitting.fittedFontSize(
+                for: field.name,
+                fontName: field.style.fontName,
+                preferredSize: field.style.fontSize,
+                in: fitBox,
+                multiline: field.type.isMultiline
+            )
+            Text(field.name)
+                .font(.custom(field.style.fontName, fixedSize: fitted * scale))
+                .foregroundStyle(.gray)
+                .frame(width: displayRect.width, height: displayRect.height, alignment: fillAlignment)
+                .clipped()
+        }
+    }
+
+    /// Mirrors FillFieldOverlay's alignment resolution.
+    private var fillAlignment: Alignment {
+        let multiline = field.type.isMultiline
+        switch field.style.alignment {
+        case .leading: return multiline ? .topLeading : .leading
+        case .center: return multiline ? .top : .center
+        case .trailing: return multiline ? .topTrailing : .trailing
+        }
     }
 
     private var moveGesture: some Gesture {
@@ -99,9 +136,11 @@ struct FieldOverlayView: View {
 
     private func handle(for corner: Corner) -> some View {
         let center = corner.point(in: displayRect)
+        // The red bottom-left handle is the only one that changes height;
+        // the others adjust width only (fields usually share one height).
         return Circle()
             .fill(.background)
-            .stroke(Color.accentColor, lineWidth: 2)
+            .stroke(corner == .bottomLeft ? Color.red : Color.accentColor, lineWidth: 2)
             .frame(width: 12, height: 12)
             .contentShape(Circle().inset(by: -10))   // generous touch target
             .position(center)
@@ -121,26 +160,24 @@ struct FieldOverlayView: View {
             )
     }
 
+    /// Only the bottom-left corner may change the height — fields usually
+    /// keep one shared height, and width-only handles make stretching a
+    /// field along a line much easier (user decision 2026-07-18).
     private func resizedRect(dragging corner: Corner, to location: CGPoint) -> CGRect {
         let minWidth = TemplateEditorViewModel.minimumViewSize.width
         let minHeight = TemplateEditorViewModel.minimumViewSize.height
         var left = baseRect.minX
         var right = baseRect.maxX
-        var top = baseRect.minY
+        let top = baseRect.minY
         var bottom = baseRect.maxY
 
         switch corner {
-        case .topLeft:
+        case .topLeft, .bottomLeft:
             left = min(location.x, right - minWidth)
-            top = min(location.y, bottom - minHeight)
-        case .topRight:
+        case .topRight, .bottomRight:
             right = max(location.x, left + minWidth)
-            top = min(location.y, bottom - minHeight)
-        case .bottomLeft:
-            left = min(location.x, right - minWidth)
-            bottom = max(location.y, top + minHeight)
-        case .bottomRight:
-            right = max(location.x, left + minWidth)
+        }
+        if corner == .bottomLeft {
             bottom = max(location.y, top + minHeight)
         }
         return CGRect(x: left, y: top, width: right - left, height: bottom - top)

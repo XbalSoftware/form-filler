@@ -16,8 +16,11 @@ struct FillPageOverlayView: View {
     let space: PageCoordinateSpace
     let pageSize: CGSize
 
-    /// Live outline while dragging out a circle, in page view space.
+    /// Live outline while dragging out a circle or comment box, in page
+    /// view space.
     @State private var draggedCircleRect: CGRect?
+    /// Working text for the comment alert.
+    @State private var commentText = ""
 
     var body: some View {
         ZStack {
@@ -33,12 +36,40 @@ struct FillPageOverlayView: View {
                 .onTapGesture { viewModel.handleOverlayTap(field) }
             }
             ForEach(viewModel.marks(onPage: viewModel.currentPageIndex)) { mark in
-                MarkOverlay(mark: mark, viewRect: space.viewRect(fromPDFRect: mark.rect, in: pageSize))
+                MarkOverlay(
+                    mark: mark,
+                    viewRect: space.viewRect(fromPDFRect: mark.rect, in: pageSize),
+                    scale: scale
+                )
             }
             if viewModel.activeTool != .entry {
                 markToolLayer
             }
         }
+        .alert(
+            "Comment",
+            isPresented: commentPromptBinding,
+            presenting: viewModel.commentPrompt
+        ) { prompt in
+            TextField("Comment", text: $commentText)
+            Button("Save") { viewModel.commitComment(prompt, text: commentText) }
+            if prompt.markID != nil {
+                Button("Delete", role: .destructive) { viewModel.deleteComment(prompt) }
+            }
+            Button("Cancel", role: .cancel) { viewModel.commentPrompt = nil }
+        } message: { _ in
+            Text("Printed in the comment box, auto-shrunk to fit.")
+        }
+        .onChange(of: viewModel.commentPrompt?.id) { _, _ in
+            commentText = viewModel.commentPrompt?.text ?? ""
+        }
+    }
+
+    private var commentPromptBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.commentPrompt != nil },
+            set: { if !$0 { viewModel.commentPrompt = nil } }
+        )
     }
 
     private var scale: CGFloat {
@@ -56,13 +87,21 @@ struct FillPageOverlayView: View {
             .gesture(markGesture)
             .overlay {
                 if let rect = draggedCircleRect {
-                    MarkShape(kind: .circle)
-                        .stroke(
-                            Color.black.opacity(0.6),
-                            style: StrokeStyle(lineWidth: MarkGeometry.lineWidth(for: rect))
-                        )
-                        .frame(width: rect.width, height: rect.height)
-                        .position(x: rect.midX, y: rect.midY)
+                    Group {
+                        if viewModel.activeTool == .comment {
+                            Rectangle().stroke(
+                                Color.black.opacity(0.6),
+                                style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+                            )
+                        } else {
+                            MarkShape(kind: .circle).stroke(
+                                Color.black.opacity(0.6),
+                                style: StrokeStyle(lineWidth: MarkGeometry.lineWidth(for: rect))
+                            )
+                        }
+                    }
+                    .frame(width: rect.width, height: rect.height)
+                    .position(x: rect.midX, y: rect.midY)
                 }
             }
     }
@@ -70,7 +109,7 @@ struct FillPageOverlayView: View {
     private var markGesture: some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
-                guard viewModel.activeTool == .circle else { return }
+                guard viewModel.activeTool == .circle || viewModel.activeTool == .comment else { return }
                 let rect = normalizedRect(value.startLocation, value.location)
                 draggedCircleRect = max(rect.width, rect.height) > 6 ? rect : nil
             }
@@ -78,19 +117,18 @@ struct FillPageOverlayView: View {
                 defer { draggedCircleRect = nil }
                 let rect = normalizedRect(value.startLocation, value.location)
                 let isTap = max(rect.width, rect.height) <= 6
+                let tapPDFPoint = space.pdfPoint(fromViewPoint: value.startLocation, in: pageSize)
                 switch viewModel.activeTool {
                 case .check:
-                    viewModel.handleMarkTap(
-                        at: space.pdfPoint(fromViewPoint: value.startLocation, in: pageSize),
-                        kind: .check
-                    )
+                    viewModel.handleMarkTap(at: tapPDFPoint, kind: .check)
                 case .circle where isTap:
-                    viewModel.handleMarkTap(
-                        at: space.pdfPoint(fromViewPoint: value.startLocation, in: pageSize),
-                        kind: .circle
-                    )
+                    viewModel.handleMarkTap(at: tapPDFPoint, kind: .circle)
                 case .circle:
                     viewModel.addCircle(around: space.pdfRect(fromViewRect: rect, in: pageSize))
+                case .comment where isTap:
+                    viewModel.handleMarkTap(at: tapPDFPoint, kind: .comment)
+                case .comment:
+                    viewModel.promptComment(in: space.pdfRect(fromViewRect: rect, in: pageSize))
                 case .entry:
                     break
                 }
@@ -107,27 +145,61 @@ struct FillPageOverlayView: View {
     }
 }
 
-/// One rendered ad-hoc mark. Never intercepts touches — removal goes
+/// One rendered ad-hoc mark. Never intercepts touches — edits/removal go
 /// through the tool layer's hit test so field taps keep working in
 /// entry mode.
 private struct MarkOverlay: View {
     let mark: AdHocMark
     let viewRect: CGRect
+    /// View points per PDF point — comments fit their text in PDF points
+    /// (export-identical) and scale up, like field text.
+    let scale: CGFloat
 
     var body: some View {
-        MarkShape(kind: mark.kind)
-            .stroke(
-                Color.black,
-                style: StrokeStyle(
-                    lineWidth: MarkGeometry.lineWidth(for: viewRect),
-                    lineCap: .round,
-                    lineJoin: .round
-                )
-            )
-            .frame(width: viewRect.width, height: viewRect.height)
-            .position(x: viewRect.midX, y: viewRect.midY)
-            .allowsHitTesting(false)
-            .accessibilityLabel(mark.kind == .check ? "Checkmark" : "Circle mark")
+        Group {
+            if mark.kind == .comment {
+                commentText
+            } else {
+                MarkShape(kind: mark.kind)
+                    .stroke(
+                        Color.black,
+                        style: StrokeStyle(
+                            lineWidth: MarkGeometry.lineWidth(for: viewRect),
+                            lineCap: .round,
+                            lineJoin: .round
+                        )
+                    )
+            }
+        }
+        .frame(width: viewRect.width, height: viewRect.height)
+        .position(x: viewRect.midX, y: viewRect.midY)
+        .allowsHitTesting(false)
+        .accessibilityLabel(accessibilityDescription)
+    }
+
+    private var commentText: some View {
+        let text = mark.text ?? ""
+        let fitBox = CGSize(width: viewRect.width / scale, height: viewRect.height / scale)
+        let fitted = TextFitting.fittedFontSize(
+            for: text,
+            fontName: AdHocMark.commentFontName,
+            preferredSize: AdHocMark.commentFontSize,
+            in: fitBox,
+            multiline: true
+        )
+        return Text(text)
+            .font(.custom(AdHocMark.commentFontName, fixedSize: fitted * scale))
+            .foregroundStyle(.black)
+            .frame(width: viewRect.width, height: viewRect.height, alignment: .topLeading)
+            .clipped()
+    }
+
+    private var accessibilityDescription: String {
+        switch mark.kind {
+        case .check: "Checkmark"
+        case .circle: "Circle mark"
+        case .comment: "Comment: \(mark.text ?? "")"
+        }
     }
 }
 

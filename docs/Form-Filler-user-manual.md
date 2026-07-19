@@ -19,7 +19,8 @@ The library is the home screen — a grid of your templates.
 
 Open a template and tap **Edit Template**.
 
-- **Tap** an empty spot on the page to add a field. **Drag** to move it; drag the corner handles to resize. Each box shows its field name in small grey print so you always know which is which.
+- **Tap** an empty spot on the page to add a field. **Drag** to move it; drag the corner handles to resize — the three blue handles adjust **width only** (fields usually share one height), and the **red bottom-left handle** adjusts width and height. Each box shows its field name in grey, rendered at the exact size, font, and alignment your entries will print at, so you can perfect alignment without leaving the editor.
+- Naming flows fast: a new field's name arrives selected (just type), and **Tab / Shift-Tab in the name box hops to the next / previous field** with its name selected too.
 - **Two fingers** pan and zoom the page.
 - The inspector (right column) lists fields in fill order — tap one to edit its name, type, font, size, alignment, colour, and date format; use Reorder to change fill order.
 - Nudge arrows move the selected field one point at a time.
@@ -51,7 +52,7 @@ Open a template and tap **Fill Form**. The form list is on the left; a live prev
 
 - **Keyboard flow**: Tab (or the ▲/▼ toolbar buttons) moves between fields. In multi-line fields, Return starts a new line and Tab still moves on. Nothing is auto-capitalised.
 - **Tap the preview** to jump to a field, toggle a checkbox, or focus a text box.
-- **Checkmark and circle tools**: above the preview, switch from **Type** to **Checkmark** (tap the form to stamp a tick — for ticking boxes printed on the form itself, no template field needed) or **Circle** (drag to ring an item). Tap any mark to remove it.
+- **Checkmark, circle, and comment tools**: above the preview, switch from **Type** to **Checkmark** (tap the form to stamp a tick — for ticking boxes printed on the form itself, no template field needed), **Circle** (drag to ring an item), or **Comment** (tap or drag out a box, then type a one-off note — no template edit needed). Tap a check or circle to remove it; tap a comment to edit or delete it.
 - **Drafts**: your entries autosave every few seconds to an encrypted draft that never leaves the iPad. You can leave the screen — even go adjust the template — and pick up where you left off; you'll be offered **Resume** when you return. **Clear form** (top left) erases the entries and the draft.
 
 ## Exporting
@@ -62,7 +63,7 @@ The blue buttons at the top right:
 - **Save** — save a copy into the Files app.
 - **Print** — print directly.
 
-The file is named `Template – Patient Name – Date.pdf` (the patient segment appears when the form has a Patient Name field).
+The file is named `Patient Name – Template – Date.pdf` (the patient segment appears when the form has a Patient Name field).
 
 ## Reopening an exported PDF
 

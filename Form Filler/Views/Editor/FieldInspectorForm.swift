@@ -39,10 +39,15 @@ struct FieldInspectorForm: View {
                 }
             }
             Section {
-                // A just-created field arrives with its placeholder name
+                // A just-created (or tabbed-to) field arrives with its name
                 // focused and fully selected, so typing replaces it.
                 TextField("Name", text: binding(\.name, default: ""), selection: $nameSelection)
                     .focused($isNameFieldFocused)
+                    .onKeyPress(.tab, phases: .down) { press in
+                        viewModel.selectAdjacentField(offset: press.modifiers.contains(.shift) ? -1 : 1)
+                            ? .handled
+                            : .ignored
+                    }
                     .onAppear { highlightNameIfNewField() }
                     .onChange(of: viewModel.selectedFieldID) { _, _ in highlightNameIfNewField() }
                 Picker("Type", selection: binding(\.type, default: .singleLineText)) {
@@ -122,11 +127,16 @@ struct FieldInspectorForm: View {
 
     private func highlightNameIfNewField() {
         guard let id = viewModel.selectedFieldID,
-              viewModel.consumeNameFocusRequest(for: id),
-              let name = viewModel.selectedField?.name
+              viewModel.consumeNameFocusRequest(for: id)
         else { return }
         isNameFieldFocused = true
-        nameSelection = TextSelection(range: name.startIndex..<name.endIndex)
+        // Select-all must land AFTER the field becomes first responder —
+        // set immediately, the platform resets the caret to the end.
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(80))
+            guard let name = viewModel.selectedField?.name, !name.isEmpty else { return }
+            nameSelection = TextSelection(range: name.startIndex..<name.endIndex)
+        }
     }
 
     /// All field types, minus Patient Name when another field already

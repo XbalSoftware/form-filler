@@ -18,6 +18,7 @@ nonisolated enum MarkGeometry {
         switch kind {
         case .check: checkPath(in: rect)
         case .circle: CGPath(ellipseIn: rect, transform: nil)
+        case .comment: CGMutablePath()   // comments are text, not strokes
         }
     }
 

@@ -101,7 +101,7 @@ struct ExportedPayloadTests {
         let template = Template(name: "Retinal Referral")
         #expect(
             PDFExportService.defaultFileName(for: template, patientName: "Jane Example", on: date)
-                == "Retinal Referral – Jane Example – 2026-07-17.pdf"
+                == "Jane Example – Retinal Referral – 2026-07-17.pdf"
         )
         // Empty/whitespace patient names fall back to the plain form.
         #expect(
