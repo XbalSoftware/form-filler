@@ -1,0 +1,300 @@
+//
+//  FillSessionView.swift
+//  Form Filler
+//
+//  Fill mode: ordered form list on the left, live page preview with value
+//  overlays on the right. Values live in memory and autosave to the
+//  encrypted on-device draft vault (every 5 seconds and whenever the
+//  screen or app is left), so a session survives editing the template
+//  mid-entry or an accidental exit — until "Clear form".
+//
+
+import SwiftUI
+import UniformTypeIdentifiers
+
+struct FillRoute: Hashable {
+    let templateID: UUID
+}
+
+struct FillSessionView: View {
+    /// Identifiable wrapper so the share popover / save sheet present per export.
+    private struct ExportedFile: Identifiable {
+        let id = UUID()
+        let url: URL
+    }
+
+    /// Identifiable wrapper so the review sheet presents per parsed import.
+    private struct ReviewData: Identifiable {
+        let id = UUID()
+        let demographics: PatientDemographics
+    }
+
+    @State private var viewModel: FillSessionViewModel
+    @State private var isConfirmingClear = false
+    @State private var sharedFile: ExportedFile?
+    @State private var savedFile: ExportedFile?
+    @State private var draftToResume: FillSessionPayload?
+    @State private var isShowingDraftPrompt = false
+    @State private var isPickingPatientPDF = false
+    @State private var patientReview: ReviewData?
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(PatientImportInbox.self) private var importInbox
+
+    init(viewModel: FillSessionViewModel) {
+        _viewModel = State(initialValue: viewModel)
+    }
+
+    var body: some View {
+        // The patient-import modifiers live here, off the main chain, so the
+        // large fillContent modifier chain stays within the compiler's
+        // type-checking budget.
+        fillContent
+            .fileImporter(isPresented: $isPickingPatientPDF, allowedContentTypes: [.pdf]) { result in
+                handlePickedPatientPDF(result)
+            }
+            .sheet(item: $patientReview) { data in
+                DemographicsReviewSheet(
+                    demographics: data.demographics,
+                    onApply: { demographics in
+                        viewModel.applyDemographics(demographics)
+                        patientReview = nil
+                    },
+                    onCancel: { patientReview = nil }
+                )
+            }
+            // A PDF shared in while this screen is already open.
+            .onChange(of: importInbox.pending) { _, _ in consumePendingImport() }
+    }
+
+    /// Opens the review sheet for a shared-in patient PDF, if one is waiting
+    /// and this form has patient fields to receive it. Returns true if it
+    /// consumed a pending import.
+    @discardableResult
+    private func consumePendingImport() -> Bool {
+        guard viewModel.hasPatientFields, let pending = importInbox.pending else { return false }
+        importInbox.pending = nil
+        guard let reviewable = viewModel.reviewableDemographics(pending) else { return false }
+        patientReview = ReviewData(demographics: reviewable)
+        return true
+    }
+
+    private var fillContent: some View {
+        HStack(spacing: 0) {
+            FillFormListView(viewModel: viewModel)
+                .frame(width: 360)
+            Divider()
+            previewColumn
+        }
+        .navigationTitle(viewModel.template.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { toolbarContent }
+        .confirmationDialog(
+            "Clear this form?",
+            isPresented: $isConfirmingClear,
+            titleVisibility: .visible
+        ) {
+            Button("Clear Form", role: .destructive) { viewModel.clearAll() }
+        } message: {
+            Text("This clears every entered value and deletes the saved draft.")
+        }
+        .alert(
+            "Resume saved draft?",
+            isPresented: $isShowingDraftPrompt,
+            presenting: draftToResume
+        ) { draft in
+            Button("Resume") { viewModel.restoreDraft(draft) }
+            Button("Start Fresh", role: .destructive) { viewModel.discardDraft() }
+        } message: { draft in
+            Text("Entries for this form were saved \(draft.savedAt.formatted(date: .abbreviated, time: .shortened)). Starting fresh deletes them.")
+        }
+        .alert("Something Went Wrong", isPresented: errorBinding) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(viewModel.errorMessage ?? "")
+        }
+        .sheet(item: Bindable(viewModel).commentEditor) { state in
+            CommentEditorSheet(
+                state: state,
+                onSave: { viewModel.commitComment($0) },
+                onDelete: { viewModel.deleteComment(id: $0) },
+                onCancel: { viewModel.commentEditor = nil }
+            )
+        }
+        .onAppear {
+            // A patient PDF shared in before this form was opened takes
+            // precedence over the draft-resume prompt.
+            if consumePendingImport() { return }
+            // Skip the prompt when the session already has values (e.g. a
+            // reopened exported PDF, or returning from the editor).
+            if !viewModel.hasAnyValues, let draft = viewModel.availableDraft() {
+                draftToResume = draft
+                isShowingDraftPrompt = true
+            }
+        }
+        .task {
+            // 5-second autosave heartbeat; unchanged ticks are free.
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(5))
+                viewModel.autosaveDraft()
+            }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase != .active {
+                viewModel.autosaveDraft()
+            }
+        }
+        .onDisappear {
+            viewModel.autosaveDraft()
+            PDFExportService.purgeTemporaryExports()
+        }
+    }
+
+    // MARK: - Toolbar
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Button("Clear form") { isConfirmingClear = true }
+                .disabled(!viewModel.hasAnyValues)
+        }
+        if viewModel.hasPatientFields {
+            // A fixed spacer breaks the two into separate toolbar capsules
+            // (iOS 26 groups adjacent items into one pill by default).
+            if #available(iOS 26.0, *) {
+                ToolbarSpacer(.fixed, placement: .topBarLeading)
+            }
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Patient Details", systemImage: "person.crop.rectangle.badge.plus") {
+                    isPickingPatientPDF = true
+                }
+            }
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            HStack(spacing: 8) {
+                Button("Print", systemImage: "printer") {
+                    withExportedFile { printPDF(at: $0) }
+                }
+                Button("Save", systemImage: "folder") {
+                    withExportedFile { savedFile = ExportedFile(url: $0) }
+                }
+                .sheet(item: $savedFile) { file in
+                    DocumentExportPicker(fileURL: file.url) { savedFile = nil }
+                }
+                Button("Share", systemImage: "square.and.arrow.up") {
+                    withExportedFile { sharedFile = ExportedFile(url: $0) }
+                }
+                .popover(item: $sharedFile) { file in
+                    ActivityShareSheet(fileURL: file.url) {
+                        sharedFile = nil
+                    }
+                    .frame(minWidth: 380, minHeight: 540)
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.blue)
+            .disabled(!viewModel.hasExportableContent)
+        }
+    }
+
+    /// Parses a picked PDF for patient details; on success opens the review
+    /// sheet, otherwise surfaces a friendly message.
+    private func handlePickedPatientPDF(_ result: Result<URL, Error>) {
+        switch result {
+        case .success(let url):
+            if let demographics = viewModel.patientDemographics(fromPDFAt: url) {
+                patientReview = ReviewData(demographics: demographics)
+            } else {
+                viewModel.errorMessage = "No patient details could be read from that PDF. It may be an image-only scan, or a layout Form Filler doesn't recognise yet."
+            }
+        case .failure(let error):
+            viewModel.errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Renders + writes the PDF, then hands the file URL to `action`;
+    /// export errors land in the shared error alert.
+    private func withExportedFile(_ action: (URL) -> Void) {
+        do {
+            action(try viewModel.exportToTemporaryFile())
+        } catch {
+            viewModel.errorMessage = "Export failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func printPDF(at url: URL) {
+        let printInfo = UIPrintInfo(dictionary: nil)
+        printInfo.jobName = viewModel.exportFileName
+        printInfo.outputType = .general
+        let controller = UIPrintInteractionController.shared
+        controller.printInfo = printInfo
+        controller.printingItem = url
+        controller.present(animated: true)
+    }
+
+    /// Entry (taps focus fields) vs. the ad-hoc mark tools.
+    private var toolPicker: some View {
+        VStack(spacing: 2) {
+            Picker("Tool", selection: Bindable(viewModel).activeTool) {
+                Label("Type", systemImage: "character.cursor.ibeam")
+                    .tag(FillSessionViewModel.FillTool.entry)
+                Label("Checkmark", systemImage: "checkmark")
+                    .tag(FillSessionViewModel.FillTool.check)
+                Label("Circle", systemImage: "circle")
+                    .tag(FillSessionViewModel.FillTool.circle)
+                Label("Comment", systemImage: "text.bubble")
+                    .tag(FillSessionViewModel.FillTool.comment)
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 460)
+            Text(toolHint)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(height: 14)
+        }
+    }
+
+    private var toolHint: String {
+        switch viewModel.activeTool {
+        case .entry: ""
+        case .check: "Tap the form to place a checkmark · tap a checkmark to remove it"
+        case .circle: "Drag to circle an item · tap a circle to remove it"
+        case .comment: "Tap or drag out a box to add a comment · tap to edit · drag to move · corner dot resizes"
+        }
+    }
+
+    private var errorBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.errorMessage != nil },
+            set: { if !$0 { viewModel.errorMessage = nil } }
+        )
+    }
+
+    // MARK: - Preview column
+
+    @ViewBuilder
+    private var previewColumn: some View {
+        if let renderService = viewModel.renderService {
+            VStack(spacing: 8) {
+                toolPicker
+                PageCanvasView(
+                    renderService: renderService,
+                    pageIndex: viewModel.currentPageIndex
+                ) { space, pageSize in
+                    FillPageOverlayView(viewModel: viewModel, space: space, pageSize: pageSize)
+                }
+                if renderService.pageCount > 1 {
+                    PageStripView(renderService: renderService, selectedPage: $viewModel.currentPageIndex)
+                }
+            }
+            .padding([.trailing, .vertical])
+        } else {
+            ContentUnavailableView(
+                "Couldn't Open PDF",
+                systemImage: "exclamationmark.triangle",
+                description: Text("The template's PDF file couldn't be read.")
+            )
+        }
+    }
+}
